@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Esports Tycoon</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+    <header class="ust-panel">
+        <div class="logo">
+            <span class="logo-icon">🎮</span>
+            <span class="logo-text">Esports Tycoon</span>
+        </div>
+        <div class="istatistik-grup">
+            <div class="istatistik"><span>💰 Kasa</span><span id="bakiye-gosterge">0 ₺</span></div>
+            <div class="istatistik"><span>👥 Taraftar</span><span id="taraftar-gosterge">0</span></div>
+            <div class="istatistik"><span>📈 Gelir</span><span id="saniye-geliri-metni">0 ₺/sn</span></div>
+            <div class="istatistik"><span>⭐ Seviye</span><span id="level-gosterge">1</span></div>
+            <div class="istatistik prestij" onclick="prestijModalAc()"><span>🎖️ Prestij</span><span id="prestij-gosterge">0</span></div>
+        </div>
+    </header>
+
+    <div class="xp-bar-container">
+        <div class="xp-bar-dis"><div id="xp-bar-ic" style="width:0%;"></div></div>
+        <span id="xp-yazi">0 / 100 XP</span>
+    </div>
+
+    <nav class="sekme-menu">
+        <button class="sekme-btn active" data-sekme="yayin"><i class="fas fa-broadcast"></i> Yayın</button>
+        <button class="sekme-btn" data-sekme="market"><i class="fas fa-store"></i> Market</button>
+        <button class="sekme-btn" data-sekme="ekip"><i class="fas fa-users"></i> Ekip</button>
+        <button class="sekme-btn" data-sekme="basari"><i class="fas fa-trophy"></i> Başarımlar</button>
+        <button class="sekme-btn" data-sekme="gorev"><i class="fas fa-tasks"></i> Görevler</button>
+        <button class="sekme-btn" data-sekme="rakip"><i class="fas fa-robot"></i> Rakipler</button>
+        <button class="sekme-btn" data-sekme="stüdyo"><i class="fas fa-palette"></i> Stüdyo</button>
+        <button class="sekme-btn" data-sekme="prestij-esya"><i class="fas fa-gem"></i> Prestij</button>
+        <button class="sekme-btn" data-sekme="istatistik"><i class="fas fa-chart-line"></i> İstatistik</button>
+        <button class="sekme-btn" data-sekme="etkinlik"><i class="fas fa-calendar-alt"></i> Etkinlik</button>
+        <button class="sekme-btn" data-sekme="liderlik"><i class="fas fa-crown"></i> Liderlik</button>
+    </nav>
+
+    <main class="sekme-icerik">
+
+        <section id="sekme-yayin" class="sekme-panel aktif">
+            <div class="oyun-alani" onclick="yayinaTikla(event)">
+                <div id="tiklama-butonu">
+                    <div class="ikon">💻</div>
+                    <div class="yazi">YAYIN YAP</div>
+                </div>
+                <div id="mesaj-kutusu">📡 Yayına başlamak için tıkla!</div>
+                <button id="gunluk-odul-btn" class="btn-odul" onclick="gunlukOdulAl()" style="margin-top:20px;">🎁 Günlük Ödülü Al</button>
+            </div>
+        </section>
+
+        <section id="sekme-market" class="sekme-panel">
+            <h2><i class="fas fa-store-alt"></i> Teknoloji Mağazası</h2>
+            <div class="market-grid">
+                <button class="market-ogesi" id="btn-enerji" onclick="esyaAl('enerji')"><div class="oge-ikon">⚡</div><div class="oge-detay"><h4>Enerji İçeceği</h4><small>Tıklama +2</small></div><div class="oge-fiyat"><span id="enerji-fiyat">75</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-mouse" onclick="esyaAl('mouse')"><div class="oge-ikon">🖱️</div><div class="oge-detay"><h4>Pro Fare</h4><small>Tıklama +3</small></div><div class="oge-fiyat"><span id="mouse-fiyat">150</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-kamera" onclick="esyaAl('kamera')"><div class="oge-ikon">📷</div><div class="oge-detay"><h4>4K Kamera</h4><small>Tıklama +8</small></div><div class="oge-fiyat"><span id="kamera-fiyat">500</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-klavye" onclick="esyaAl('klavye')"><div class="oge-ikon">⌨️</div><div class="oge-detay"><h4>Mekanik Klavye</h4><small>Tıklama +15</small></div><div class="oge-fiyat"><span id="klavye-fiyat">1200</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-amator" onclick="esyaAl('amator')"><div class="oge-ikon">👦</div><div class="oge-detay"><h4>Amatör Oyuncu</h4><small>Gelir +3 ₺/sn</small></div><div class="oge-fiyat"><span id="amator-fiyat">300</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-yesilekran" onclick="esyaAl('yesilekran')"><div class="oge-ikon">🟩</div><div class="oge-detay"><h4>Yeşil Ekran</h4><small>Gelir +10 ₺/sn</small><small class="kilit-metni" id="yesilekran-kilit">🔒 50 Taraftar</small></div><div class="oge-fiyat"><span id="yesilekran-fiyat">800</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-yildiz" onclick="esyaAl('yildiz')"><div class="oge-ikon">⭐</div><div class="oge-detay"><h4>Yıldız Transfer</h4><small>Gelir +20 ₺/sn</small></div><div class="oge-fiyat"><span id="yildiz-fiyat">2000</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-moderator" onclick="esyaAl('moderator')"><div class="oge-ikon">🛡️</div><div class="oge-detay"><h4>Moderatör Ekibi</h4><small>Gelir +40 ₺/sn</small><small class="kilit-metni" id="moderator-kilit">🔒 100 Taraftar</small></div><div class="oge-fiyat"><span id="moderator-fiyat">4500</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-reklam" onclick="esyaAl('reklam')"><div class="oge-ikon">📺</div><div class="oge-detay"><h4>Ulusal Reklam</h4><small>Gelir +80 ₺/sn</small><small class="kilit-metni" id="reklam-kilit">🔒 150 Taraftar</small></div><div class="oge-fiyat"><span id="reklam-fiyat">10000</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-yayinevi" onclick="esyaAl('yayinevi')"><div class="oge-ikon">🏢</div><div class="oge-detay"><h4>Yayın Evi</h4><small>Gelir +200 ₺/sn</small><small class="kilit-metni" id="yayinevi-kilit">🔒 300 Taraftar</small></div><div class="oge-fiyat"><span id="yayinevi-fiyat">25000</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-espor" onclick="esyaAl('espor')"><div class="oge-ikon">🏆</div><div class="oge-detay"><h4>E-Spor Takımı</h4><small>Gelir +500 ₺/sn</small><small class="kilit-metni" id="espor-kilit">🔒 500 Taraftar</small></div><div class="oge-fiyat"><span id="espor-fiyat">60000</span> ₺</div></button>
+                <button class="market-ogesi" id="btn-globalturnuva" onclick="esyaAl('globalturnuva')"><div class="oge-ikon">🌍</div><div class="oge-detay"><h4>Global Turnuva</h4><small>Gelir +1200 ₺/sn</small><small class="kilit-metni" id="globalturnuva-kilit">🔒 1000 Taraftar</small></div><div class="oge-fiyat"><span id="globalturnuva-fiyat">150000</span> ₺</div></button>
+            </div>
+        </section>
+
+        <section id="sekme-ekip" class="sekme-panel">
+            <h2><i class="fas fa-user-tie"></i> İnsan Kaynakları</h2>
+            <div class="personel-listesi">
+                <div class="personel-ogesi">
+                    <div class="personel-detay">
+                        <h4>📱 Sosyal Medya Uzmanı <span id="sm-kilit" style="color:#e74c3c; font-size:10px;">(🔒 200 Taraftar)</span></h4>
+                        <small>Saniyede 1 Taraftar kazandırır.</small>
+                    </div>
+                    <button class="btn-iseal" id="btn-per-sosyal_medyaci" onclick="personelAl('sosyal_medyaci')">15.000 ₺</button>
+                </div>
+                <div class="personel-ogesi">
+                    <div class="personel-detay">
+                        <h4>💼 Finans Uzmanı <span id="fu-kilit" style="color:#e74c3c; font-size:10px;">(🔒 600 Taraftar)</span></h4>
+                        <small>Marketteki eşyaları %20 ucuzlatır.</small>
+                    </div>
+                    <button class="btn-iseal" id="btn-per-vergi_uzmani" onclick="personelAl('vergi_uzmani')">50.000 ₺</button>
+                </div>
+                <div class="personel-ogesi">
+                    <div class="personel-detay">
+                        <h4>🎬 Profesyonel Kurgucu <span id="pk-kilit" style="color:#e74c3c; font-size:10px;">(🔒 1500 Taraftar)</span></h4>
+                        <small>Tüm pasif gelirini kalıcı %50 artırır.</small>
+                    </div>
+                    <button class="btn-iseal" id="btn-per-kurgucu" onclick="personelAl('kurgucu')">120.000 ₺</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="sekme-basari" class="sekme-panel">
+            <h2><i class="fas fa-trophy"></i> Başarımlar</h2>
+            <div id="basari-listesi" class="kart-grid"></div>
+        </section>
+
+        <section id="sekme-gorev" class="sekme-panel">
+            <h2><i class="fas fa-tasks"></i> Günlük Görevler</h2>
+            <div id="gunluk-gorev-listesi" class="kart-grid"></div>
+        </section>
+
+        <section id="sekme-rakip" class="sekme-panel">
+            <h2><i class="fas fa-robot"></i> AI Rakipleri</h2>
+            <div id="rakip-listesi" class="kart-grid"></div>
+        </section>
+
+        <section id="sekme-stüdyo" class="sekme-panel">
+            <h2><i class="fas fa-palette"></i> Stüdyo Dekorasyonları</h2>
+            <div id="dekorasyon-listesi" class="kart-grid"></div>
+        </section>
+
+        <section id="sekme-prestij-esya" class="sekme-panel">
+            <h2><i class="fas fa-gem"></i> Prestij Özel Eşyaları</h2>
+            <div id="ozel-esya-listesi" class="kart-grid"></div>
+        </section>
+
+        <section id="sekme-istatistik" class="sekme-panel">
+            <h2><i class="fas fa-chart-line"></i> Yayın İstatistikleri</h2>
+            <div id="istatistik-listesi" class="kart-grid" style="grid-template-columns:1fr;"></div>
+        </section>
+
+        <section id="sekme-etkinlik" class="sekme-panel">
+            <h2><i class="fas fa-calendar-alt"></i> Özel Etkinlikler</h2>
+            <div id="etkinlik-listesi" class="kart-grid"></div>
+        </section>
+
+        <section id="sekme-liderlik" class="sekme-panel">
+            <h2><i class="fas fa-crown"></i> Liderlik Tablosu</h2>
+            <div id="liderlik-listesi" class="kart-grid" style="grid-template-columns:1fr;"></div>
+        </section>
+
+    </main>
+
+    <!-- Modal -->
+    <div id="prestij-modali" class="modal" style="display:none;">
+        <div class="modal-icerik" style="text-align:center;">
+            <h2 style="color:#f1c40f;">♻️ Yeniden Doğuş</h2>
+            <p>Seviyen, paran, eşyaların sıfırlanır, kalıcı çarpan kazanırsın.</p>
+            <p style="background:#1f2833;padding:10px;border-radius:5px;">
+                Mevcut Çarpan: <b id="mevcut-carpan-metni">x1</b><br>
+                Yeni Çarpan: <b id="sonraki-carpan-metni">x2</b><br>
+                <span id="prestij-sart-metni">Gerekli Seviye: 10</span>
+            </p>
+            <button id="btn-prestij-yap" onclick="prestijIslemiBaslat()" style="background:#e74c3c;color:white;padding:15px;width:100%;border:none;border-radius:5px;font-weight:bold;margin-top:10px;">Efsane Ol (Sıfırla)</button>
+            <button onclick="document.getElementById('prestij-modali').style.display='none'" style="background:transparent;color:#aaa;margin-top:15px;border:none;">Vazgeç</button>
+        </div>
+    </div>
+
+    <div id="teklif-modali" class="modal" style="display:none;">
+        <div class="modal-icerik">
+            <div class="modal-baslik">
+                <h3 id="teklif-baslik">Teklif</h3>
+                <span class="kapat-butonu" onclick="document.getElementById('teklif-modali').style.display='none'">✖</span>
+            </div>
+            <p id="teklif-metin" style="margin-bottom:20px;">Teklif açıklaması</p>
+            <div class="mesaj-butonlari">
+                <button id="teklif-kabul" class="btn-kabul" data-id="">Kabul Et</button>
+                <button id="teklif-red" class="btn-red" data-id="">Reddet</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="seviye-modali" class="modal" style="display:none;">
+        <div class="modal-icerik">
+            <div class="modal-baslik"><h3>🎯 Kariyer Yolu</h3><span class="kapat-butonu" onclick="document.getElementById('seviye-modali').style.display='none'">✖</span></div>
+            <div id="seviye-yolu-listesi"></div>
+        </div>
+    </div>
+
+    <div id="olay-modali" class="modal" style="display:none;">
+        <div class="modal-icerik">
+            <h2 id="olay-baslik">Olay</h2>
+            <p id="olay-metin">Açıklama</p>
+            <button onclick="document.getElementById('olay-modali').style.display='none'" style="background:white;color:#111;padding:10px 20px;border:none;border-radius:5px;margin-top:15px;">Tamam</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='oyun_v3.js') }}"></script>
+</body>
+</html>
