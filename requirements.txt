@@ -1,6 +1,5 @@
-Flask==2.3.3
-Werkzeug==2.3.8
-flask-login==0.6.2
+Flask==2.3.2
+flask-login==0.6.3
 bcrypt==4.0.1
 psycopg2-binary==2.9.7
 gunicorn==21.2.0
