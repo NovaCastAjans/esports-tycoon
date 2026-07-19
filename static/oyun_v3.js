@@ -51,7 +51,7 @@ function arkaPlanMuzikBaslat() {
     } catch (e) {}
 }
 
-// ---------- FORMAT PARA ----------
+// ---------- PARA FORMATLAMA ----------
 function formatPara(sayi) {
     if (sayi >= 1e9) return (sayi / 1e9).toFixed(1) + 'B';
     if (sayi >= 1e6) return (sayi / 1e6).toFixed(1) + 'M';
@@ -59,7 +59,7 @@ function formatPara(sayi) {
     return Math.floor(sayi).toString();
 }
 
-// ---------- CARPAN HESAPLA ----------
+// ---------- YARDIMCI FONKSİYONLAR ----------
 window.carpanHesapla = () => {
     let carpan = (1.0 + (level * 0.03)) * (1.0 + prestij * 0.15);
     if (personeller["kurgucu"] && personeller["kurgucu"].alinma === 1) carpan *= 1.3;
@@ -72,7 +72,7 @@ window.hesaplaFiyat = (esya) => {
     return fiyat;
 };
 
-// ---------- KAYDET / YÜKLE ----------
+// ---------- VERİ YÖNETİMİ ----------
 window.oyunuKaydet = () => {
     fetch('/kaydet', { method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ bakiye, taraftar, tiklamaGucu, saniyeGeliri, marketEsyalari, level, xp, mesajlar, alinanOduller, prestij, personeller, toplamTiklama })
@@ -114,7 +114,7 @@ window.oyunuYukle = async () => {
             }
         }
     } catch (e) {
-        console.error('Yükleme hatası:', e);
+        console.error('Oyun yükleme hatası:', e);
     }
 };
 
@@ -144,7 +144,6 @@ window.teklifKontrol = () => {
                 await window.oyunuYukle();
                 if (mesajlar.length > 0) {
                     window.teklifGoster(mesajlar[0]);
-                    sesOynat('offer.mp3');
                 }
             }
         } catch (e) {}
@@ -159,11 +158,13 @@ window.teklifGoster = (teklif) => {
     const kabulBtn = document.getElementById('teklif-kabul');
     const redBtn = document.getElementById('teklif-red');
     if (!modal || !baslik || !metin || !kabulBtn || !redBtn) return;
+    
     baslik.innerText = teklif.baslik;
     metin.innerText = teklif.metin;
     kabulBtn.dataset.id = teklif.id;
     redBtn.dataset.id = teklif.id;
     modal.style.display = 'flex';
+    sesOynat('offer.mp3');
 };
 
 window.teklifIslem = async (id, aksiyon) => {
@@ -200,7 +201,7 @@ window.teklifIslem = async (id, aksiyon) => {
     }
 };
 
-// ---------- YAYIN TIKLAMA ----------
+// ---------- OYUN AKSİYONLARI ----------
 window.yayinaTikla = (event) => {
     let kazanc = Math.floor(tiklamaGucu * window.carpanHesapla());
     bakiye += kazanc;
@@ -246,7 +247,7 @@ window.seviyeAtladı = () => {
     sesOynat('levelup.mp3');
 };
 
-// ---------- ESYA AL ----------
+// ---------- MARKET ----------
 window.esyaAl = (id) => {
     const esya = marketEsyalari[id];
     if(!esya) return;
@@ -262,7 +263,7 @@ window.esyaAl = (id) => {
     } else { alert("Yetersiz bakiye!"); }
 };
 
-// ---------- PERSONEL AL ----------
+// ---------- PERSONEL ----------
 window.personelAl = (id) => {
     let p = personeller[id];
     if(!p) { console.error("Personel bulunamadı:", id); return; }
@@ -295,6 +296,28 @@ window.prestijIslemiBaslat = async () => {
             window.location.reload();
         } else {
             alert("Prestij işlemi sırasında hata oluştu!");
+        }
+    }
+};
+
+window.prestijModalAc = () => {
+    const modal = document.getElementById("prestij-modali");
+    if (!modal) return;
+    modal.style.display = "flex";
+    const gerekliLevel = (prestij + 1) * 10;
+    document.getElementById("mevcut-carpan-metni").innerText = 'x' + (1 + prestij * 0.15).toFixed(2);
+    document.getElementById("sonraki-carpan-metni").innerText = 'x' + (1 + (prestij+1) * 0.15).toFixed(2);
+    document.getElementById("prestij-sart-metni").innerText = `Gerekli Seviye: ${gerekliLevel} (Şu an: ${level})`;
+    const btn = document.getElementById("btn-prestij-yap");
+    if (btn) {
+        if (level >= gerekliLevel) {
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            btn.style.cursor = "pointer";
+        } else {
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            btn.style.cursor = "not-allowed";
         }
     }
 };
@@ -683,25 +706,6 @@ window.prestijOzelEsyalariGoster = async () => {
     }
 };
 
-// ---------- PRESTİJ MODAL ----------
-window.prestijModalAc = () => {
-    document.getElementById("prestij-modali").style.display = "flex";
-    const gerekliLevel = (prestij + 1) * 10;
-    document.getElementById("mevcut-carpan-metni").innerText = 'x' + (1 + prestij * 0.15).toFixed(2);
-    document.getElementById("sonraki-carpan-metni").innerText = 'x' + (1 + (prestij+1) * 0.15).toFixed(2);
-    document.getElementById("prestij-sart-metni").innerText = `Gerekli Seviye: ${gerekliLevel} (Şu an: ${level})`;
-    const btn = document.getElementById("btn-prestij-yap");
-    if (level >= gerekliLevel) {
-        btn.disabled = false;
-        btn.style.opacity = "1";
-        btn.style.cursor = "pointer";
-    } else {
-        btn.disabled = true;
-        btn.style.opacity = "0.5";
-        btn.style.cursor = "not-allowed";
-    }
-};
-
 // ---------- EKRAN GÜNCELLEME ----------
 window.ekraniGuncelle = () => {
     if(document.getElementById("bakiye-gosterge")) document.getElementById("bakiye-gosterge").innerText = formatPara(bakiye) + " ₺";
@@ -757,8 +761,41 @@ window.ekraniGuncelle = () => {
     }
 };
 
-// ---------- DOM YÜKLENDİ ----------
+// ---------- SEVİYE YOLU ----------
+window.seviyeYolunuGoster = () => {
+    const liste = document.getElementById('seviye-yolu-listesi');
+    if (!liste) return;
+    liste.innerHTML = '';
+    for (let i = 1; i <= level + 5; i++) {
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.padding = '8px 0';
+        div.style.borderBottom = '1px solid #1f2f44';
+        const odul = i % 5 === 0 ? '🎁 Özel Ödül' : '⚡ +5 Tıklama Gücü';
+        const alindi = i <= level ? '✅' : '🔒';
+        div.innerHTML = `<span>Seviye ${i}</span><span>${odul}</span><span>${alindi}</span>`;
+        liste.appendChild(div);
+    }
+};
+
+window.seviyeModalAc = () => {
+    const modal = document.getElementById("seviye-modali");
+    if (modal) {
+        modal.style.display = "flex";
+        window.seviyeYolunuGoster();
+    }
+};
+
+// ---------- MODAL KAPATMA ----------
+window.modalKapat = function(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+};
+
+// ---------- SAYFA YÜKLENME ----------
 document.addEventListener('DOMContentLoaded', () => {
+    // Sekme geçişleri
     const btns = document.querySelectorAll('.sekme-btn');
     const paneller = document.querySelectorAll('.sekme-panel');
 
@@ -773,6 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Teklif modal butonları
     const kabulBtn = document.getElementById('teklif-kabul');
     const redBtn = document.getElementById('teklif-red');
     if (kabulBtn) {
@@ -789,13 +827,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// ---------- SAYFA YÜKLENDİ ----------
 window.onload = async () => { 
     await window.oyunuYukle();
     window.pasifGelirDongusu();
     window.teklifKontrol();
-    // Arka plan müziğini başlat
-    setTimeout(() => {
-        arkaPlanMuzikBaslat();
-    }, 1000);
+    arkaPlanMuzikBaslat();
 };
