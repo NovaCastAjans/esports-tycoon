@@ -1,4 +1,13 @@
 console.log("Oyun v3 motoru aktif!");
+
+// Global Değişkenler
+let bakiye = 0, taraftar = 0, tiklamaGucu = 1, saniyeGeliri = 0, level = 1, xp = 0, xpGereken = 100;
+let mesajlar = [], alinanOduller = [], marketEsyalari = {}, personeller = {}, prestij = 0;
+let pasifInterval = null;
+let toplamTiklama = 0;
+let istatistikler = {};
+let gunlukOdulAlinmis = false;
+
 // ---------- SES SİSTEMİ ----------
 let sesAktif = true;
 let arkaPlanMuzik = null;
@@ -15,16 +24,17 @@ function sesOynat(dosya) {
 function sesToggle() {
     sesAktif = !sesAktif;
     const btn = document.getElementById('ses-butonu');
+    if (!btn) return;
     const icon = btn.querySelector('i');
     if (sesAktif) {
         btn.classList.remove('muted');
-        icon.className = 'fas fa-volume-up';
+        if (icon) icon.className = 'fas fa-volume-up';
         if (arkaPlanMuzik) {
             arkaPlanMuzik.play().catch(() => {});
         }
     } else {
         btn.classList.add('muted');
-        icon.className = 'fas fa-volume-mute';
+        if (icon) icon.className = 'fas fa-volume-mute';
         if (arkaPlanMuzik) {
             arkaPlanMuzik.pause();
         }
@@ -40,14 +50,8 @@ function arkaPlanMuzikBaslat() {
         arkaPlanMuzik.play().catch(() => {});
     } catch (e) {}
 }
-// Global Değişkenler
-let bakiye = 0, taraftar = 0, tiklamaGucu = 1, saniyeGeliri = 0, level = 1, xp = 0, xpGereken = 100;
-let mesajlar = [], alinanOduller = [], marketEsyalari = {}, personeller = {}, prestij = 0;
-let pasifInterval = null;
-let toplamTiklama = 0;
-let istatistikler = {};
-let gunlukOdulAlinmis = false;
 
+// ---------- FORMAT PARA ----------
 function formatPara(sayi) {
     if (sayi >= 1e9) return (sayi / 1e9).toFixed(1) + 'B';
     if (sayi >= 1e6) return (sayi / 1e6).toFixed(1) + 'M';
@@ -55,6 +59,7 @@ function formatPara(sayi) {
     return Math.floor(sayi).toString();
 }
 
+// ---------- CARPAN HESAPLA ----------
 window.carpanHesapla = () => {
     let carpan = (1.0 + (level * 0.03)) * (1.0 + prestij * 0.15);
     if (personeller["kurgucu"] && personeller["kurgucu"].alinma === 1) carpan *= 1.3;
@@ -67,6 +72,7 @@ window.hesaplaFiyat = (esya) => {
     return fiyat;
 };
 
+// ---------- KAYDET / YÜKLE ----------
 window.oyunuKaydet = () => {
     fetch('/kaydet', { method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ bakiye, taraftar, tiklamaGucu, saniyeGeliri, marketEsyalari, level, xp, mesajlar, alinanOduller, prestij, personeller, toplamTiklama })
@@ -74,40 +80,45 @@ window.oyunuKaydet = () => {
 };
 
 window.oyunuYukle = async () => {
-    const res = await fetch('/yukle');
-    const data = await res.json();
-    if (data.durum !== "yok") {
-        bakiye = data.bakiye;
-        taraftar = data.taraftar;
-        tiklamaGucu = data.tiklamaGucu;
-        saniyeGeliri = data.saniyeGeliri;
-        marketEsyalari = data.marketEsyalari || {};
-        personeller = data.personeller || {};
-        level = data.level;
-        xp = data.xp;
-        xpGereken = level * 100; // Seviyeye göre güncelle
-        mesajlar = data.mesajlar || [];
-        alinanOduller = data.alinanOduller || [];
-        prestij = data.prestij || 0;
-        toplamTiklama = data.toplamTiklama || 0;
-        gunlukOdulAlinmis = data.gunluk_odul_alinmis || false;
-        
-        window.ekraniGuncelle();
-        window.istatistikleriGuncelle();
-        window.etkinlikleriGoster();
-        window.liderligiGoster();
-        window.başarımlariGoster();
-        window.gunlukGorevleriGoster();
-        window.rakipleriGoster();
-        window.dekorasyonlariGoster();
-        window.prestijOzelEsyalariGoster();
-        window.gunlukOdulKontrol();
-        if (mesajlar.length > 0) {
-            window.teklifGoster(mesajlar[0]);
+    try {
+        const res = await fetch('/yukle');
+        const data = await res.json();
+        if (data.durum !== "yok") {
+            bakiye = data.bakiye;
+            taraftar = data.taraftar;
+            tiklamaGucu = data.tiklamaGucu;
+            saniyeGeliri = data.saniyeGeliri;
+            marketEsyalari = data.marketEsyalari || {};
+            personeller = data.personeller || {};
+            level = data.level;
+            xp = data.xp;
+            xpGereken = level * 100;
+            mesajlar = data.mesajlar || [];
+            alinanOduller = data.alinanOduller || [];
+            prestij = data.prestij || 0;
+            toplamTiklama = data.toplamTiklama || 0;
+            gunlukOdulAlinmis = data.gunluk_odul_alinmis || false;
+            
+            window.ekraniGuncelle();
+            window.istatistikleriGuncelle();
+            window.etkinlikleriGoster();
+            window.liderligiGoster();
+            window.başarımlariGoster();
+            window.gunlukGorevleriGoster();
+            window.rakipleriGoster();
+            window.dekorasyonlariGoster();
+            window.prestijOzelEsyalariGoster();
+            window.gunlukOdulKontrol();
+            if (mesajlar.length > 0) {
+                window.teklifGoster(mesajlar[0]);
+            }
         }
+    } catch (e) {
+        console.error('Yükleme hatası:', e);
     }
 };
 
+// ---------- PASİF GELİR ----------
 window.pasifGelirDongusu = () => {
     if (pasifInterval) clearInterval(pasifInterval);
     pasifInterval = setInterval(() => {
@@ -123,16 +134,20 @@ window.pasifGelirDongusu = () => {
     }, 1000);
 };
 
+// ---------- TEKLİF SİSTEMİ ----------
 window.teklifKontrol = () => {
     setInterval(async () => {
-        const res = await fetch('/teklif_al', { method: 'POST' });
-        const data = await res.json();
-        if (data.durum === "basarili") {
-            await window.oyunuYukle();
-            if (mesajlar.length > 0) {
-                window.teklifGoster(mesajlar[0]);
+        try {
+            const res = await fetch('/teklif_al', { method: 'POST' });
+            const data = await res.json();
+            if (data.durum === "basarili") {
+                await window.oyunuYukle();
+                if (mesajlar.length > 0) {
+                    window.teklifGoster(mesajlar[0]);
+                    sesOynat('offer.mp3');
+                }
             }
-        }
+        } catch (e) {}
     }, 60000);
 };
 
@@ -143,13 +158,12 @@ window.teklifGoster = (teklif) => {
     const metin = document.getElementById('teklif-metin');
     const kabulBtn = document.getElementById('teklif-kabul');
     const redBtn = document.getElementById('teklif-red');
-    
+    if (!modal || !baslik || !metin || !kabulBtn || !redBtn) return;
     baslik.innerText = teklif.baslik;
     metin.innerText = teklif.metin;
     kabulBtn.dataset.id = teklif.id;
     redBtn.dataset.id = teklif.id;
     modal.style.display = 'flex';
-    sesOynat('offer.mp3');
 };
 
 window.teklifIslem = async (id, aksiyon) => {
@@ -186,6 +200,7 @@ window.teklifIslem = async (id, aksiyon) => {
     }
 };
 
+// ---------- YAYIN TIKLAMA ----------
 window.yayinaTikla = (event) => {
     let kazanc = Math.floor(tiklamaGucu * window.carpanHesapla());
     bakiye += kazanc;
@@ -222,15 +237,16 @@ window.seviyeAtladı = () => {
         { tip: 'bakiye', miktar: Math.floor(level * 30) },
         { tip: 'taraftar', miktar: Math.floor(level * 2) },
         { tip: 'tiklamaGucu', miktar: 1 }
-        sesOynat('levelup.mp3');
     ];
     const secilen = oduller[Math.floor(Math.random() * oduller.length)];
     if (secilen.tip === 'bakiye') bakiye += secilen.miktar;
     else if (secilen.tip === 'taraftar') taraftar += secilen.miktar;
     else if (secilen.tip === 'tiklamaGucu') tiklamaGucu += secilen.miktar;
     alert(`🎉 Seviye atladın! Ödül: ${secilen.miktar} ${secilen.tip === 'bakiye' ? '₺' : secilen.tip === 'taraftar' ? 'taraftar' : 'tıklama gücü'} kazandın!`);
+    sesOynat('levelup.mp3');
 };
 
+// ---------- ESYA AL ----------
 window.esyaAl = (id) => {
     const esya = marketEsyalari[id];
     if(!esya) return;
@@ -246,6 +262,7 @@ window.esyaAl = (id) => {
     } else { alert("Yetersiz bakiye!"); }
 };
 
+// ---------- PERSONEL AL ----------
 window.personelAl = (id) => {
     let p = personeller[id];
     if(!p) { console.error("Personel bulunamadı:", id); return; }
@@ -264,6 +281,7 @@ window.personelAl = (id) => {
     else { alert("Bütçen yetersiz!"); }
 };
 
+// ---------- PRESTİJ ----------
 window.prestijIslemiBaslat = async () => {
     const gerekliLevel = (prestij + 1) * 10;
     if (level < gerekliLevel) {
@@ -281,6 +299,7 @@ window.prestijIslemiBaslat = async () => {
     }
 };
 
+// ---------- GÜNLÜK ÖDÜL ----------
 window.gunlukOdulKontrol = async () => {
     try {
         const res = await fetch('/gunluk_odul');
@@ -318,6 +337,7 @@ window.gunlukOdulAl = async () => {
     }
 };
 
+// ---------- İSTATİSTİKLER ----------
 window.istatistikleriGuncelle = async () => {
     try {
         const res = await fetch('/istatistikler');
@@ -344,6 +364,7 @@ window.istatistikleriGuncelle = async () => {
     }
 };
 
+// ---------- ETKİNLİKLER ----------
 window.etkinlikleriGoster = async () => {
     try {
         const res = await fetch('/etkinlikler');
@@ -398,6 +419,7 @@ window.etkinlikTamamla = async (etkinlik_id) => {
     }
 };
 
+// ---------- LİDERLİK ----------
 window.liderligiGoster = async () => {
     try {
         const res = await fetch('/liderlik');
@@ -424,6 +446,7 @@ window.liderligiGoster = async () => {
     }
 };
 
+// ---------- BAŞARIMLAR ----------
 window.başarımlariKontrolEt = async () => {
     try {
         const res = await fetch('/achievements');
@@ -466,6 +489,7 @@ window.başarımlariGoster = async () => {
     }
 };
 
+// ---------- GÜNLÜK GÖREVLER ----------
 window.gunlukGorevleriGoster = async () => {
     try {
         const res = await fetch('/daily_quests');
@@ -510,6 +534,7 @@ window.gunlukGorevTamamla = async (quest_id) => {
     }
 };
 
+// ---------- RAKİPLER ----------
 window.rakipleriGoster = async () => {
     try {
         const res = await fetch('/ai_opponents');
@@ -551,6 +576,7 @@ window.rakipMeydanOku = async (ai_id) => {
     }
 };
 
+// ---------- DEKORASYONLAR ----------
 window.dekorasyonlariGoster = async () => {
     try {
         const res = await fetch('/studio_decorations');
@@ -614,6 +640,7 @@ window.dekorasyonKullan = async (id) => {
     }
 };
 
+// ---------- LOOT KUTUSU ----------
 window.lootKutusuAc = async (box_id) => {
     try {
         const res = await fetch('/open_lootbox', {
@@ -634,6 +661,7 @@ window.lootKutusuAc = async (box_id) => {
     }
 };
 
+// ---------- PRESTİJ ÖZEL EŞYALAR ----------
 window.prestijOzelEsyalariGoster = async () => {
     try {
         const res = await fetch('/prestige_special_items');
@@ -655,6 +683,7 @@ window.prestijOzelEsyalariGoster = async () => {
     }
 };
 
+// ---------- PRESTİJ MODAL ----------
 window.prestijModalAc = () => {
     document.getElementById("prestij-modali").style.display = "flex";
     const gerekliLevel = (prestij + 1) * 10;
@@ -673,6 +702,7 @@ window.prestijModalAc = () => {
     }
 };
 
+// ---------- EKRAN GÜNCELLEME ----------
 window.ekraniGuncelle = () => {
     if(document.getElementById("bakiye-gosterge")) document.getElementById("bakiye-gosterge").innerText = formatPara(bakiye) + " ₺";
     if(document.getElementById("taraftar-gosterge")) document.getElementById("taraftar-gosterge").innerText = formatPara(taraftar);
@@ -727,6 +757,7 @@ window.ekraniGuncelle = () => {
     }
 };
 
+// ---------- DOM YÜKLENDİ ----------
 document.addEventListener('DOMContentLoaded', () => {
     const btns = document.querySelectorAll('.sekme-btn');
     const paneller = document.querySelectorAll('.sekme-panel');
@@ -758,9 +789,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ---------- SAYFA YÜKLENDİ ----------
 window.onload = async () => { 
     await window.oyunuYukle();
     window.pasifGelirDongusu();
     window.teklifKontrol();
-    arkaPlanMuzikBaslat();
+    // Arka plan müziğini başlat
+    setTimeout(() => {
+        arkaPlanMuzikBaslat();
+    }, 1000);
 };
