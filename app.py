@@ -9,7 +9,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
-app.secret_key = 'çok_gizli_bir_anahtar_değiştir_bunu'
+app.secret_key = os.environ.get('SECRET_KEY', 'çok_gizli_bir_anahtar_değiştir_bunu')
 
 # ---------- VARSAYILAN VERİLER ----------
 DEFAULT_MARKET = {
@@ -445,17 +445,18 @@ def oyunu_yukle():
         satir = cursor.fetchone()
         conn.close()
         if satir:
-            # Market ve personel verilerini kontrol et, boşsa varsayılanı ata
+            # Market ve personel verilerini kontrol et
             market_data = satir[4]
-            if not market_data or market_data == 'null' or market_data == '{}':
+            if not market_data or market_data == 'null' or market_data == '{}' or market_data == '[]':
                 market_data = json.dumps(DEFAULT_MARKET)
                 conn2 = get_db_connection()
                 cur2 = SmartCursor(conn2)
                 cur2.execute('UPDATE oyun_kaydi SET marketEsyalari=%s WHERE user_id=%s', (market_data, user_id))
                 conn2.commit()
                 conn2.close()
+            
             personeller_data = satir[10]
-            if not personeller_data or personeller_data == 'null' or personeller_data == '{}':
+            if not personeller_data or personeller_data == 'null' or personeller_data == '{}' or personeller_data == '[]':
                 personeller_data = json.dumps(DEFAULT_PERSONELLER)
                 conn2 = get_db_connection()
                 cur2 = SmartCursor(conn2)
