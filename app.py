@@ -351,17 +351,17 @@ def get_or_create_user(username):
         user_id = cursor.fetchone()[0]
         default_market = {
             "enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
-            "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0},
-            "kamera": {"fiyat": 500, "tur": "tiklama", "guc": 8, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
-            "klavye": {"fiyat": 1200, "tur": "tiklama", "guc": 15, "fiyatArtisi": 1.8, "gerekenTaraftar": 0},
-            "amator": {"fiyat": 300, "tur": "pasif", "guc": 3, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
+            "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 10},
+            "kamera": {"fiyat": 500, "tur": "tiklama", "guc": 8, "fiyatArtisi": 1.7, "gerekenTaraftar": 20},
+            "klavye": {"fiyat": 1200, "tur": "tiklama", "guc": 15, "fiyatArtisi": 1.8, "gerekenTaraftar": 30},
+            "amator": {"fiyat": 300, "tur": "pasif", "guc": 3, "fiyatArtisi": 1.5, "gerekenTaraftar": 40},
             "yesilekran": {"fiyat": 800, "tur": "pasif", "guc": 10, "fiyatArtisi": 1.6, "gerekenTaraftar": 50},
             "yildiz": {"fiyat": 2000, "tur": "pasif", "guc": 20, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
-            "moderator": {"fiyat": 4500, "tur": "pasif", "guc": 40, "fiyatArtisi": 1.8, "gerekenTaraftar": 100},
-            "reklam": {"fiyat": 10000, "tur": "pasif", "guc": 80, "fiyatArtisi": 1.9, "gerekenTaraftar": 150},
-            "yayinevi": {"fiyat": 25000, "tur": "pasif", "guc": 200, "fiyatArtisi": 2.0, "gerekenTaraftar": 300},
-            "espor": {"fiyat": 60000, "tur": "pasif", "guc": 500, "fiyatArtisi": 2.1, "gerekenTaraftar": 500},
-            "globalturnuva": {"fiyat": 150000, "tur": "pasif", "guc": 1200, "fiyatArtisi": 2.2, "gerekenTaraftar": 1000}
+            "moderator": {"fiyat": 4500, "tur": "pasif", "guc": 40, "fiyatArtisi": 1.8, "gerekenTaraftar": 1000},
+            "reklam": {"fiyat": 10000, "tur": "pasif", "guc": 80, "fiyatArtisi": 1.9, "gerekenTaraftar": 1500},
+            "yayinevi": {"fiyat": 25000, "tur": "pasif", "guc": 200, "fiyatArtisi": 2.0, "gerekenTaraftar": 3000},
+            "espor": {"fiyat": 60000, "tur": "pasif", "guc": 500, "fiyatArtisi": 2.1, "gerekenTaraftar": 5000},
+            "globalturnuva": {"fiyat": 150000, "tur": "pasif", "guc": 1200, "fiyatArtisi": 2.2, "gerekenTaraftar": 10000}
         }
         default_personeller = {
             "sosyal_medyaci": {"fiyat": 15000, "alinma": 0, "gerekenTaraftar": 200},
