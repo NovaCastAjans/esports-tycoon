@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
+    <link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#4a9eff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Esports Tycoon</title>
@@ -282,6 +286,13 @@
     </div>
     {% endif %}
 
-    <script src="{{ url_for('static', filename='oyun_v3.js') }}"></script>
+    <script src="{{ url_for('static', filename='oyun_v3.js') }}"></script> 
+    <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/service-worker.js')
+      .then(() => console.log('Service Worker registered'))
+      .catch(err => console.error('Service Worker registration failed:', err));
+  }
+</script>
 </body>
 </html>
