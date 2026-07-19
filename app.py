@@ -11,6 +11,27 @@ from psycopg2.extras import RealDictCursor
 app = Flask(__name__)
 app.secret_key = 'çok_gizli_bir_anahtar_değiştir_bunu'
 
+# ---------- VARSAYILAN VERİLER ----------
+DEFAULT_MARKET = {
+    "enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
+    "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0},
+    "kamera": {"fiyat": 500, "tur": "tiklama", "guc": 8, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
+    "klavye": {"fiyat": 1200, "tur": "tiklama", "guc": 15, "fiyatArtisi": 1.8, "gerekenTaraftar": 0},
+    "amator": {"fiyat": 300, "tur": "pasif", "guc": 3, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
+    "yesilekran": {"fiyat": 800, "tur": "pasif", "guc": 10, "fiyatArtisi": 1.6, "gerekenTaraftar": 50},
+    "yildiz": {"fiyat": 2000, "tur": "pasif", "guc": 20, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
+    "moderator": {"fiyat": 4500, "tur": "pasif", "guc": 40, "fiyatArtisi": 1.8, "gerekenTaraftar": 100},
+    "reklam": {"fiyat": 10000, "tur": "pasif", "guc": 80, "fiyatArtisi": 1.9, "gerekenTaraftar": 150},
+    "yayinevi": {"fiyat": 25000, "tur": "pasif", "guc": 200, "fiyatArtisi": 2.0, "gerekenTaraftar": 300},
+    "espor": {"fiyat": 60000, "tur": "pasif", "guc": 500, "fiyatArtisi": 2.1, "gerekenTaraftar": 500},
+    "globalturnuva": {"fiyat": 150000, "tur": "pasif", "guc": 1200, "fiyatArtisi": 2.2, "gerekenTaraftar": 1000}
+}
+DEFAULT_PERSONELLER = {
+    "sosyal_medyaci": {"fiyat": 15000, "alinma": 0, "gerekenTaraftar": 200},
+    "vergi_uzmani": {"fiyat": 50000, "alinma": 0, "gerekenTaraftar": 600},
+    "kurgucu": {"fiyat": 120000, "alinma": 0, "gerekenTaraftar": 1500}
+}
+
 # ---------- SMART CURSOR ----------
 class SmartCursor:
     def __init__(self, conn):
@@ -353,29 +374,10 @@ def get_or_create_user(username):
             cursor.execute('INSERT INTO users (username) VALUES (%s) RETURNING id', (username,))
             user_id = cursor.fetchone()[0]
 
-        default_market = {
-            "enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
-            "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0},
-            "kamera": {"fiyat": 500, "tur": "tiklama", "guc": 8, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
-            "klavye": {"fiyat": 1200, "tur": "tiklama", "guc": 15, "fiyatArtisi": 1.8, "gerekenTaraftar": 0},
-            "amator": {"fiyat": 300, "tur": "pasif", "guc": 3, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
-            "yesilekran": {"fiyat": 800, "tur": "pasif", "guc": 10, "fiyatArtisi": 1.6, "gerekenTaraftar": 50},
-            "yildiz": {"fiyat": 2000, "tur": "pasif", "guc": 20, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
-            "moderator": {"fiyat": 4500, "tur": "pasif", "guc": 40, "fiyatArtisi": 1.8, "gerekenTaraftar": 100},
-            "reklam": {"fiyat": 10000, "tur": "pasif", "guc": 80, "fiyatArtisi": 1.9, "gerekenTaraftar": 150},
-            "yayinevi": {"fiyat": 25000, "tur": "pasif", "guc": 200, "fiyatArtisi": 2.0, "gerekenTaraftar": 300},
-            "espor": {"fiyat": 60000, "tur": "pasif", "guc": 500, "fiyatArtisi": 2.1, "gerekenTaraftar": 500},
-            "globalturnuva": {"fiyat": 150000, "tur": "pasif", "guc": 1200, "fiyatArtisi": 2.2, "gerekenTaraftar": 1000}
-        }
-        default_personeller = {
-            "sosyal_medyaci": {"fiyat": 15000, "alinma": 0, "gerekenTaraftar": 200},
-            "vergi_uzmani": {"fiyat": 50000, "alinma": 0, "gerekenTaraftar": 600},
-            "kurgucu": {"fiyat": 120000, "alinma": 0, "gerekenTaraftar": 1500}
-        }
         cursor.execute('''INSERT INTO oyun_kaydi 
             (user_id, bakiye, taraftar, tiklamaGucu, saniyeGeliri, marketEsyalari, level, xp, mesajlar, alinan_oduller, prestij, personeller, toplam_tiklama, son_giris, gunluk_odul_alinmis) 
             VALUES (%s, 0, 0, 1, 0, %s, 1, 0, %s, %s, 0, %s, 0, %s, FALSE)''',
-            (user_id, json.dumps(default_market), json.dumps([]), json.dumps([]), json.dumps(default_personeller), datetime.now()))
+            (user_id, json.dumps(DEFAULT_MARKET), json.dumps([]), json.dumps([]), json.dumps(DEFAULT_PERSONELLER), datetime.now()))
         cursor.execute('INSERT INTO yayin_istatistikleri (user_id) VALUES (%s)', (user_id,))
         cursor.execute('INSERT INTO liderlik (user_id) VALUES (%s)', (user_id,))
         conn.commit()
@@ -443,18 +445,36 @@ def oyunu_yukle():
         satir = cursor.fetchone()
         conn.close()
         if satir:
+            # Market ve personel verilerini kontrol et, boşsa varsayılanı ata
+            market_data = satir[4]
+            if not market_data or market_data == 'null' or market_data == '{}':
+                market_data = json.dumps(DEFAULT_MARKET)
+                conn2 = get_db_connection()
+                cur2 = SmartCursor(conn2)
+                cur2.execute('UPDATE oyun_kaydi SET marketEsyalari=%s WHERE user_id=%s', (market_data, user_id))
+                conn2.commit()
+                conn2.close()
+            personeller_data = satir[10]
+            if not personeller_data or personeller_data == 'null' or personeller_data == '{}':
+                personeller_data = json.dumps(DEFAULT_PERSONELLER)
+                conn2 = get_db_connection()
+                cur2 = SmartCursor(conn2)
+                cur2.execute('UPDATE oyun_kaydi SET personeller=%s WHERE user_id=%s', (personeller_data, user_id))
+                conn2.commit()
+                conn2.close()
+
             return jsonify({
                 "bakiye": satir[0],
                 "taraftar": satir[1],
                 "tiklamaGucu": satir[2],
                 "saniyeGeliri": satir[3],
-                "marketEsyalari": json.loads(satir[4]),
+                "marketEsyalari": json.loads(market_data),
                 "level": satir[5],
                 "xp": satir[6],
                 "mesajlar": json.loads(satir[7]) if satir[7] else [],
                 "alinanOduller": json.loads(satir[8]) if satir[8] else [],
                 "prestij": satir[9] if satir[9] else 0,
-                "personeller": json.loads(satir[10]) if satir[10] else {},
+                "personeller": json.loads(personeller_data),
                 "toplamTiklama": satir[11] if satir[11] else 0,
                 "son_giris": satir[12],
                 "gunluk_odul_alinmis": bool(satir[13]) if satir[13] else False
@@ -473,14 +493,12 @@ def prestij_islem():
         cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (user_id,))
         mevcut_prestij = cursor.fetchone()[0]
         yeni_prestij = mevcut_prestij + 1
-        default_market = {"enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0}, "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0}, "kamera": {"fiyat": 500, "tur": "tiklama", "guc": 8, "fiyatArtisi": 1.7, "gerekenTaraftar": 0}, "klavye": {"fiyat": 1200, "tur": "tiklama", "guc": 15, "fiyatArtisi": 1.8, "gerekenTaraftar": 0}, "amator": {"fiyat": 300, "tur": "pasif", "guc": 3, "fiyatArtisi": 1.5, "gerekenTaraftar": 0}, "yesilekran": {"fiyat": 800, "tur": "pasif", "guc": 10, "fiyatArtisi": 1.6, "gerekenTaraftar": 50}, "yildiz": {"fiyat": 2000, "tur": "pasif", "guc": 20, "fiyatArtisi": 1.7, "gerekenTaraftar": 0}, "moderator": {"fiyat": 4500, "tur": "pasif", "guc": 40, "fiyatArtisi": 1.8, "gerekenTaraftar": 100}, "reklam": {"fiyat": 10000, "tur": "pasif", "guc": 80, "fiyatArtisi": 1.9, "gerekenTaraftar": 150}, "yayinevi": {"fiyat": 25000, "tur": "pasif", "guc": 200, "fiyatArtisi": 2.0, "gerekenTaraftar": 300}, "espor": {"fiyat": 60000, "tur": "pasif", "guc": 500, "fiyatArtisi": 2.1, "gerekenTaraftar": 500}, "globalturnuva": {"fiyat": 150000, "tur": "pasif", "guc": 1200, "fiyatArtisi": 2.2, "gerekenTaraftar": 1000}}
-        default_personeller = {"sosyal_medyaci": {"fiyat": 15000, "alinma": 0, "gerekenTaraftar": 200}, "vergi_uzmani": {"fiyat": 50000, "alinma": 0, "gerekenTaraftar": 600}, "kurgucu": {"fiyat": 120000, "alinma": 0, "gerekenTaraftar": 1500}}
         cursor.execute('''UPDATE oyun_kaydi SET 
             bakiye=0, taraftar=0, tiklamaGucu=1, saniyeGeliri=0, 
             marketEsyalari=%s, level=1, xp=0, mesajlar=%s, 
             alinan_oduller=%s, prestij=%s, personeller=%s, toplam_tiklama=0
             WHERE user_id=%s''',
-            (json.dumps(default_market), json.dumps([]), json.dumps([]), yeni_prestij, json.dumps(default_personeller), user_id))
+            (json.dumps(DEFAULT_MARKET), json.dumps([]), json.dumps([]), yeni_prestij, json.dumps(DEFAULT_PERSONELLER), user_id))
         cursor.execute('UPDATE yayin_istatistikleri SET toplam_yayin_suresi=0, toplam_kazanilan_para=0, toplam_kazanilan_taraftar=0, toplam_tiklama=0, en_yuksek_gelir=0 WHERE user_id=%s', (user_id,))
         conn.commit()
         conn.close()

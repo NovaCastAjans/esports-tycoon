@@ -249,8 +249,13 @@ window.seviyeAtladı = () => {
 
 // ---------- MARKET ----------
 window.esyaAl = (id) => {
+    console.log('esyaAl çağrıldı, id:', id);
+    console.log('marketEsyalari:', marketEsyalari);
     const esya = marketEsyalari[id];
-    if(!esya) return;
+    if(!esya) {
+        alert('Eşya bulunamadı!');
+        return;
+    }
     let fiyat = window.hesaplaFiyat(esya);
     if(taraftar < esya.gerekenTaraftar) { alert("Yeterli taraftarın yok!"); return; }
     if(bakiye >= fiyat) {
@@ -265,8 +270,13 @@ window.esyaAl = (id) => {
 
 // ---------- PERSONEL ----------
 window.personelAl = (id) => {
+    console.log('personelAl çağrıldı, id:', id);
+    console.log('personeller:', personeller);
     let p = personeller[id];
-    if(!p) { console.error("Personel bulunamadı:", id); return; }
+    if(!p) { 
+        alert('Personel bulunamadı!');
+        return; 
+    }
     if (p.alinma === 1) { alert("Bu personel zaten alındı!"); return; }
     if(taraftar < p.gerekenTaraftar) { alert("Yeterli taraftarın yok!"); return; }
     if(bakiye >= p.fiyat) { 
@@ -281,7 +291,6 @@ window.personelAl = (id) => {
     }
     else { alert("Bütçen yetersiz!"); }
 };
-
 // ---------- PRESTİJ ----------
 window.prestijIslemiBaslat = async () => {
     const gerekliLevel = (prestij + 1) * 10;
@@ -708,56 +717,62 @@ window.prestijOzelEsyalariGoster = async () => {
 
 // ---------- EKRAN GÜNCELLEME ----------
 window.ekraniGuncelle = () => {
-    if(document.getElementById("bakiye-gosterge")) document.getElementById("bakiye-gosterge").innerText = formatPara(bakiye) + " ₺";
-    if(document.getElementById("taraftar-gosterge")) document.getElementById("taraftar-gosterge").innerText = formatPara(taraftar);
-    if(document.getElementById("level-gosterge")) document.getElementById("level-gosterge").innerText = level;
-    if(document.getElementById("saniye-geliri-metni")) document.getElementById("saniye-geliri-metni").innerText = formatPara(Math.floor(saniyeGeliri * window.carpanHesapla())) + " ₺/sn";
-    if(document.getElementById("prestij-gosterge")) document.getElementById("prestij-gosterge").innerText = prestij;
-    
-    const xpBar = document.getElementById("xp-bar-ic");
-    const xpYazi = document.getElementById("xp-yazi");
-    if (xpBar) {
-        const yuzde = (xp / xpGereken) * 100;
-        xpBar.style.width = Math.min(yuzde, 100) + '%';
-    }
-    if (xpYazi) {
-        xpYazi.innerText = `${Math.floor(xp)} / ${xpGereken} XP`;
-    }
-    
-    for (let id in marketEsyalari) {
-        const esya = marketEsyalari[id];
-        const fiyatSpan = document.getElementById(id + '-fiyat');
-        if (fiyatSpan) {
-            const fiyat = window.hesaplaFiyat(esya);
-            fiyatSpan.innerText = formatPara(fiyat);
+    try {
+        if(document.getElementById("bakiye-gosterge")) document.getElementById("bakiye-gosterge").innerText = formatPara(bakiye) + " ₺";
+        if(document.getElementById("taraftar-gosterge")) document.getElementById("taraftar-gosterge").innerText = formatPara(taraftar);
+        if(document.getElementById("level-gosterge")) document.getElementById("level-gosterge").innerText = level;
+        if(document.getElementById("saniye-geliri-metni")) document.getElementById("saniye-geliri-metni").innerText = formatPara(Math.floor(saniyeGeliri * window.carpanHesapla())) + " ₺/sn";
+        if(document.getElementById("prestij-gosterge")) document.getElementById("prestij-gosterge").innerText = prestij;
+        
+        const xpBar = document.getElementById("xp-bar-ic");
+        const xpYazi = document.getElementById("xp-yazi");
+        if (xpBar) {
+            const yuzde = (xp / xpGereken) * 100;
+            xpBar.style.width = Math.min(yuzde, 100) + '%';
         }
-        const kilitMetni = document.getElementById(id + '-kilit');
-        if (kilitMetni) {
-            kilitMetni.style.display = (taraftar >= esya.gerekenTaraftar) ? 'none' : 'block';
+        if (xpYazi) {
+            xpYazi.innerText = `${Math.floor(xp)} / ${xpGereken} XP`;
         }
-        const btn = document.getElementById('btn-' + id);
-        if (btn) {
-            if (taraftar >= esya.gerekenTaraftar) btn.classList.remove('kilitli');
-            else btn.classList.add('kilitli');
+        
+        // Market eşyalarını güncelle
+        for (let id in marketEsyalari) {
+            const esya = marketEsyalari[id];
+            const fiyatSpan = document.getElementById(id + '-fiyat');
+            if (fiyatSpan) {
+                const fiyat = window.hesaplaFiyat(esya);
+                fiyatSpan.innerText = formatPara(fiyat);
+            }
+            const kilitMetni = document.getElementById(id + '-kilit');
+            if (kilitMetni) {
+                kilitMetni.style.display = (taraftar >= esya.gerekenTaraftar) ? 'none' : 'block';
+            }
+            const btn = document.getElementById('btn-' + id);
+            if (btn) {
+                if (taraftar >= esya.gerekenTaraftar) btn.classList.remove('kilitli');
+                else btn.classList.add('kilitli');
+            }
         }
-    }
-    
-    for (let id in personeller) {
-        const p = personeller[id];
-        const btn = document.getElementById('btn-per-' + id);
-        if (btn) {
-            if (p.alinma === 1) {
-                btn.disabled = true;
-                btn.innerText = '✅ Alındı';
-            } else {
-                btn.disabled = false;
-                btn.innerText = formatPara(p.fiyat) + ' ₺';
-                const kilitSpan = document.getElementById(id === 'sosyal_medyaci' ? 'sm-kilit' : id === 'vergi_uzmani' ? 'fu-kilit' : 'pk-kilit');
-                if (kilitSpan) {
-                    kilitSpan.style.display = (taraftar >= p.gerekenTaraftar) ? 'none' : 'inline';
+        
+        // Personelleri güncelle
+        for (let id in personeller) {
+            const p = personeller[id];
+            const btn = document.getElementById('btn-per-' + id);
+            if (btn) {
+                if (p.alinma === 1) {
+                    btn.disabled = true;
+                    btn.innerText = '✅ Alındı';
+                } else {
+                    btn.disabled = false;
+                    btn.innerText = formatPara(p.fiyat) + ' ₺';
+                    const kilitSpan = document.getElementById(id === 'sosyal_medyaci' ? 'sm-kilit' : id === 'vergi_uzmani' ? 'fu-kilit' : 'pk-kilit');
+                    if (kilitSpan) {
+                        kilitSpan.style.display = (taraftar >= p.gerekenTaraftar) ? 'none' : 'inline';
+                    }
                 }
             }
         }
+    } catch (e) {
+        console.error('Ekran güncelleme hatası:', e);
     }
 };
 
