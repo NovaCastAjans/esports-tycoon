@@ -6,9 +6,99 @@
     <title>Esports Tycoon</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .giris-formu {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #0b0e14;
+        }
+        .giris-kart {
+            background: #141c2b;
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid #4a9eff;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .giris-kart h1 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+        }
+        .giris-kart p {
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+        .giris-kart input {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background: #0b0e14;
+            border: 1px solid #2a3a55;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 16px;
+        }
+        .giris-kart button {
+            width: 100%;
+            padding: 12px;
+            background: #4a9eff;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #fff;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .giris-kart button:hover {
+            background: #3a7fcc;
+        }
+        .flash {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .danger {
+            background: #3a1a1a;
+            border: 1px solid #ef4444;
+            color: #ef4444;
+        }
+        .success {
+            background: #1a3a2a;
+            border: 1px solid #4ade80;
+            color: #4ade80;
+        }
+        .oyun-gizle {
+            display: none !important;
+        }
+    </style>
 </head>
 <body>
 
+    {% if show_login %}
+    <!-- Giriş Formu -->
+    <div class="giris-formu">
+        <div class="giris-kart">
+            <h1>🎮 Esports Tycoon</h1>
+            <p>Oyuna başlamak için kullanıcı adını gir</p>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endwith %}
+            <form method="post" action="{{ url_for('login_page') }}">
+                <input type="text" name="username" placeholder="Kullanıcı Adı" required>
+                <button type="submit">Oyuna Başla</button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+
+    <!-- Oyun -->
+    <div id="oyun-icerik">
     <header class="ust-panel">
         <div class="logo">
             <span class="logo-icon">🎮</span>
@@ -20,6 +110,10 @@
             <div class="istatistik"><span>📈 Gelir</span><span id="saniye-geliri-metni">0 ₺/sn</span></div>
             <div class="istatistik"><span>⭐ Seviye</span><span id="level-gosterge">1</span></div>
             <div class="istatistik prestij" onclick="prestijModalAc()"><span>🎖️ Prestij</span><span id="prestij-gosterge">0</span></div>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <span style="color:#94a3b8; font-size:14px;">👤 {{ session['username'] }}</span>
+            <a href="{{ url_for('logout') }}" style="color:#ef4444; text-decoration:none; font-size:14px;">Çıkış</a>
         </div>
     </header>
 
@@ -142,7 +236,7 @@
 
     </main>
 
-    <!-- Modal -->
+    <!-- Modallar -->
     <div id="prestij-modali" class="modal" style="display:none;">
         <div class="modal-icerik" style="text-align:center;">
             <h2 style="color:#f1c40f;">♻️ Yeniden Doğuş</h2>
@@ -185,6 +279,8 @@
             <button onclick="document.getElementById('olay-modali').style.display='none'" style="background:white;color:#111;padding:10px 20px;border:none;border-radius:5px;margin-top:15px;">Tamam</button>
         </div>
     </div>
+    </div>
+    {% endif %}
 
     <script src="{{ url_for('static', filename='oyun_v3.js') }}"></script>
 </body>

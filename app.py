@@ -2,15 +2,42 @@ import os
 import json
 import random
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-import bcrypt
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import sqlite3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 app.secret_key = 'çok_gizli_bir_anahtar_değiştir_bunu'
+
+# ---------- SMART CURSOR (SQLite/PostgreSQL uyumlu) ----------
+class SmartCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self.cursor = conn.cursor()
+        self.is_sqlite = isinstance(conn, sqlite3.Connection)
+
+    def execute(self, query, params=None):
+        if self.is_sqlite and params is not None:
+            query = query.replace('%s', '?')
+        if params is not None:
+            return self.cursor.execute(query, params)
+        else:
+            return self.cursor.execute(query)
+
+    def executemany(self, query, params_list):
+        if self.is_sqlite:
+            query = query.replace('%s', '?')
+        return self.cursor.executemany(query, params_list)
+
+    def fetchone(self):
+        return self.cursor.fetchone()
+
+    def fetchall(self):
+        return self.cursor.fetchall()
+
+    def __getattr__(self, name):
+        return getattr(self.cursor, name)
 
 # ---------- VERİTABANI BAĞLANTI ----------
 def get_db_connection():
@@ -22,50 +49,26 @@ def get_db_connection():
     else:
         return psycopg2.connect(DATABASE_URL)
 
-# ---------- FLASK-LOGIN ----------
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
-class User(UserMixin):
-    def __init__(self, id, username, password_hash):
-        self.id = id
-        self.username = username
-        self.password_hash = password_hash
-
-@login_manager.user_loader
-def load_user(user_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, username, password_hash FROM users WHERE id = %s', (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        return User(row[0], row[1], row[2])
-    return None
-
-# ---------- VERİTABANI KURULUMU (TÜM TABLOLAR) ----------
+# ---------- VERİTABANI KURULUMU ----------
 def veritabani_kur():
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
 
-    # Kullanıcı tablosu
+    # Tüm tabloları oluştur (öncekiyle aynı)
+    # Kullanıcı
     if isinstance(conn, sqlite3.Connection):
         cursor.execute('''CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
     else:
         cursor.execute('''CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
 
-    # Oyun kaydı (user_id ile)
     cursor.execute('''CREATE TABLE IF NOT EXISTS oyun_kaydi (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id),
@@ -85,7 +88,6 @@ def veritabani_kur():
         gunluk_odul_alinmis BOOLEAN DEFAULT FALSE
     )''')
 
-    # Yayın istatistikleri
     cursor.execute('''CREATE TABLE IF NOT EXISTS yayin_istatistikleri (
         user_id INTEGER PRIMARY KEY REFERENCES users(id),
         toplam_yayin_suresi INTEGER DEFAULT 0,
@@ -95,7 +97,6 @@ def veritabani_kur():
         en_yuksek_gelir REAL DEFAULT 0
     )''')
 
-    # Liderlik
     cursor.execute('''CREATE TABLE IF NOT EXISTS liderlik (
         user_id INTEGER PRIMARY KEY REFERENCES users(id),
         prestij INTEGER DEFAULT 0,
@@ -105,7 +106,6 @@ def veritabani_kur():
         son_guncelleme TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-    # Başarımlar (sabit)
     cursor.execute('''CREATE TABLE IF NOT EXISTS achievements (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -123,7 +123,6 @@ def veritabani_kur():
         PRIMARY KEY (user_id, achievement_id)
     )''')
 
-    # Günlük görevler (sabit)
     cursor.execute('''CREATE TABLE IF NOT EXISTS daily_quests (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -142,7 +141,6 @@ def veritabani_kur():
         PRIMARY KEY (user_id, quest_id, date)
     )''')
 
-    # Stüdyo dekorasyonları (sabit)
     cursor.execute('''CREATE TABLE IF NOT EXISTS studio_decorations (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -162,7 +160,6 @@ def veritabani_kur():
         PRIMARY KEY (user_id, decoration_id)
     )''')
 
-    # Loot kutuları (sabit)
     cursor.execute('''CREATE TABLE IF NOT EXISTS loot_boxes (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -176,7 +173,6 @@ def veritabani_kur():
         opened_at TIMESTAMP
     )''')
 
-    # Prestij özel eşyaları (sabit)
     cursor.execute('''CREATE TABLE IF NOT EXISTS prestige_special_items (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -187,7 +183,6 @@ def veritabani_kur():
         bonus_value REAL
     )''')
 
-    # AI rakipleri (sabit)
     cursor.execute('''CREATE TABLE IF NOT EXISTS ai_opponents (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -199,7 +194,6 @@ def veritabani_kur():
         last_updated TIMESTAMP
     )''')
 
-    # Etkinlikler (sabit)
     cursor.execute('''CREATE TABLE IF NOT EXISTS etkinlikler (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -218,8 +212,7 @@ def veritabani_kur():
         PRIMARY KEY (user_id, etkinlik_id)
     )''')
 
-    # Varsayılan verileri ekle (sadece boşsa)
-    # Başarımlar
+    # Varsayılan veriler
     cursor.execute('SELECT COUNT(*) FROM achievements')
     if cursor.fetchone()[0] == 0:
         basarimlar = [
@@ -238,7 +231,6 @@ def veritabani_kur():
         ]
         cursor.executemany('INSERT INTO achievements (id, name, description, icon, condition_type, condition_value, reward_type, reward_amount) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)', basarimlar)
 
-    # Günlük görevler
     cursor.execute('SELECT COUNT(*) FROM daily_quests')
     if cursor.fetchone()[0] == 0:
         gorevler = [
@@ -248,7 +240,6 @@ def veritabani_kur():
         ]
         cursor.executemany('INSERT INTO daily_quests (id, name, description, condition_type, condition_value, reward_type, reward_amount) VALUES (%s, %s, %s, %s, %s, %s, %s)', gorevler)
 
-    # Loot kutuları
     cursor.execute('SELECT COUNT(*) FROM loot_boxes')
     if cursor.fetchone()[0] == 0:
         bronz_pool = json.dumps([
@@ -269,11 +260,10 @@ def veritabani_kur():
             {'tip': 'taraftar', 'miktar': 100, 'agirlik': 25},
             {'tip': 'tiklamaGucu', 'miktar': 10, 'agirlik': 20},
         ])
-        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (1, %s, %s)', ('Bronz Kutu', bronz_pool))
-        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (2, %s, %s)', ('Gümüş Kutu', gumus_pool))
-        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (3, %s, %s)', ('Altın Kutu', altin_pool))
+        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s, %s)', (1, 'Bronz Kutu', bronz_pool))
+        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s, %s)', (2, 'Gümüş Kutu', gumus_pool))
+        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s, %s)', (3, 'Altın Kutu', altin_pool))
 
-    # Prestij özel eşyaları
     cursor.execute('SELECT COUNT(*) FROM prestige_special_items')
     if cursor.fetchone()[0] == 0:
         ozel_esyalar = [
@@ -284,7 +274,6 @@ def veritabani_kur():
         ]
         cursor.executemany('INSERT INTO prestige_special_items (id, name, description, icon, required_prestige, bonus_type, bonus_value) VALUES (%s, %s, %s, %s, %s, %s, %s)', ozel_esyalar)
 
-    # AI rakipleri
     cursor.execute('SELECT COUNT(*) FROM ai_opponents')
     if cursor.fetchone()[0] == 0:
         rakipler = [
@@ -295,7 +284,6 @@ def veritabani_kur():
         ]
         cursor.executemany('INSERT INTO ai_opponents (id, name, icon, income, followers, level, growth_rate, last_updated) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)', rakipler)
 
-    # Stüdyo dekorasyonları
     cursor.execute('SELECT COUNT(*) FROM studio_decorations')
     if cursor.fetchone()[0] == 0:
         dekorlar = [
@@ -307,7 +295,6 @@ def veritabani_kur():
         ]
         cursor.executemany('INSERT INTO studio_decorations (id, name, description, icon, price, bonus_type, bonus_value, is_special, required_prestige) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)', dekorlar)
 
-    # Etkinlikler
     cursor.execute('SELECT COUNT(*) FROM etkinlikler')
     if cursor.fetchone()[0] == 0:
         simdi = datetime.now()
@@ -331,92 +318,103 @@ def format_para(sayi):
     if sayi >= 1e3: return f"{sayi/1e3:.1f}K"
     return str(int(sayi))
 
-# ---------- AUTH ROUTES ----------
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form['username'].strip()
-        password = request.form['password']
-        if not username or not password:
-            flash('Kullanıcı adı ve şifre boş olamaz.', 'danger')
-            return render_template('register.html')
-        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute('INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id', (username, password_hash))
-            user_id = cursor.fetchone()[0]
-            default_market = {
-                "enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
-                "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0},
-                "kamera": {"fiyat": 500, "tur": "tiklama", "guc": 8, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
-                "klavye": {"fiyat": 1200, "tur": "tiklama", "guc": 15, "fiyatArtisi": 1.8, "gerekenTaraftar": 0},
-                "amator": {"fiyat": 300, "tur": "pasif", "guc": 3, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
-                "yesilekran": {"fiyat": 800, "tur": "pasif", "guc": 10, "fiyatArtisi": 1.6, "gerekenTaraftar": 50},
-                "yildiz": {"fiyat": 2000, "tur": "pasif", "guc": 20, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
-                "moderator": {"fiyat": 4500, "tur": "pasif", "guc": 40, "fiyatArtisi": 1.8, "gerekenTaraftar": 100},
-                "reklam": {"fiyat": 10000, "tur": "pasif", "guc": 80, "fiyatArtisi": 1.9, "gerekenTaraftar": 150},
-                "yayinevi": {"fiyat": 25000, "tur": "pasif", "guc": 200, "fiyatArtisi": 2.0, "gerekenTaraftar": 300},
-                "espor": {"fiyat": 60000, "tur": "pasif", "guc": 500, "fiyatArtisi": 2.1, "gerekenTaraftar": 500},
-                "globalturnuva": {"fiyat": 150000, "tur": "pasif", "guc": 1200, "fiyatArtisi": 2.2, "gerekenTaraftar": 1000}
-            }
-            default_personeller = {
-                "sosyal_medyaci": {"fiyat": 15000, "alinma": 0, "gerekenTaraftar": 200},
-                "vergi_uzmani": {"fiyat": 50000, "alinma": 0, "gerekenTaraftar": 600},
-                "kurgucu": {"fiyat": 120000, "alinma": 0, "gerekenTaraftar": 1500}
-            }
-            cursor.execute('''INSERT INTO oyun_kaydi 
-                (user_id, bakiye, taraftar, tiklamaGucu, saniyeGeliri, marketEsyalari, level, xp, mesajlar, alinan_oduller, prestij, personeller, toplam_tiklama, son_giris, gunluk_odul_alinmis) 
-                VALUES (%s, 0, 0, 1, 0, %s, 1, 0, %s, %s, 0, %s, 0, %s, FALSE)''',
-                (user_id, json.dumps(default_market), json.dumps([]), json.dumps([]), json.dumps(default_personeller), datetime.now()))
-            cursor.execute('INSERT INTO yayin_istatistikleri (user_id) VALUES (%s)', (user_id,))
-            cursor.execute('INSERT INTO liderlik (user_id) VALUES (%s)', (user_id,))
-            conn.commit()
-            flash('Kayıt başarılı! Giriş yapabilirsiniz.', 'success')
-            return redirect(url_for('login'))
-        except Exception as e:
-            flash('Bu kullanıcı adı zaten alınmış veya bir hata oluştu.', 'danger')
-            conn.rollback()
-        finally:
-            conn.close()
-    return render_template('register.html')
+# ---------- YARDIMCI FONKSİYONLAR ----------
+def get_user_id(username):
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT id FROM users WHERE username = %s', (username,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return row[0]
+    return None
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, username, password_hash FROM users WHERE username = %s', (username,))
-        user = cursor.fetchone()
-        conn.close()
-        if user and bcrypt.checkpw(password.encode('utf-8'), user[2].encode('utf-8')):
-            login_user(User(user[0], user[1], user[2]))
-            return redirect(url_for('ana_ekran'))
+def get_or_create_user(username):
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT id FROM users WHERE username = %s', (username,))
+    row = cursor.fetchone()
+    if row:
+        user_id = row[0]
+    else:
+        if isinstance(conn, sqlite3.Connection):
+            cursor.execute('INSERT INTO users (username) VALUES (?)', (username,))
+            user_id = cursor.cursor.lastrowid
         else:
-            flash('Kullanıcı adı veya şifre hatalı.', 'danger')
-    return render_template('login.html')
+            cursor.execute('INSERT INTO users (username) VALUES (%s) RETURNING id', (username,))
+            user_id = cursor.fetchone()[0]
+
+        default_market = {
+            "enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
+            "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0},
+            "kamera": {"fiyat": 500, "tur": "tiklama", "guc": 8, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
+            "klavye": {"fiyat": 1200, "tur": "tiklama", "guc": 15, "fiyatArtisi": 1.8, "gerekenTaraftar": 0},
+            "amator": {"fiyat": 300, "tur": "pasif", "guc": 3, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
+            "yesilekran": {"fiyat": 800, "tur": "pasif", "guc": 10, "fiyatArtisi": 1.6, "gerekenTaraftar": 50},
+            "yildiz": {"fiyat": 2000, "tur": "pasif", "guc": 20, "fiyatArtisi": 1.7, "gerekenTaraftar": 0},
+            "moderator": {"fiyat": 4500, "tur": "pasif", "guc": 40, "fiyatArtisi": 1.8, "gerekenTaraftar": 100},
+            "reklam": {"fiyat": 10000, "tur": "pasif", "guc": 80, "fiyatArtisi": 1.9, "gerekenTaraftar": 150},
+            "yayinevi": {"fiyat": 25000, "tur": "pasif", "guc": 200, "fiyatArtisi": 2.0, "gerekenTaraftar": 300},
+            "espor": {"fiyat": 60000, "tur": "pasif", "guc": 500, "fiyatArtisi": 2.1, "gerekenTaraftar": 500},
+            "globalturnuva": {"fiyat": 150000, "tur": "pasif", "guc": 1200, "fiyatArtisi": 2.2, "gerekenTaraftar": 1000}
+        }
+        default_personeller = {
+            "sosyal_medyaci": {"fiyat": 15000, "alinma": 0, "gerekenTaraftar": 200},
+            "vergi_uzmani": {"fiyat": 50000, "alinma": 0, "gerekenTaraftar": 600},
+            "kurgucu": {"fiyat": 120000, "alinma": 0, "gerekenTaraftar": 1500}
+        }
+        cursor.execute('''INSERT INTO oyun_kaydi 
+            (user_id, bakiye, taraftar, tiklamaGucu, saniyeGeliri, marketEsyalari, level, xp, mesajlar, alinan_oduller, prestij, personeller, toplam_tiklama, son_giris, gunluk_odul_alinmis) 
+            VALUES (%s, 0, 0, 1, 0, %s, 1, 0, %s, %s, 0, %s, 0, %s, FALSE)''',
+            (user_id, json.dumps(default_market), json.dumps([]), json.dumps([]), json.dumps(default_personeller), datetime.now()))
+        cursor.execute('INSERT INTO yayin_istatistikleri (user_id) VALUES (%s)', (user_id,))
+        cursor.execute('INSERT INTO liderlik (user_id) VALUES (%s)', (user_id,))
+        conn.commit()
+    conn.close()
+    return user_id
+
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ---------- AUTH ROUTES ----------
+@app.route('/login', methods=['GET', 'POST'])
+def login_page():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        if not username:
+            flash('Kullanıcı adı boş olamaz.', 'danger')
+            return render_template('index.html', show_login=True)
+        user_id = get_or_create_user(username)
+        session['username'] = username
+        session['user_id'] = user_id
+        return redirect(url_for('ana_ekran'))
+    return render_template('index.html', show_login=True)
 
 @app.route('/logout')
-@login_required
 def logout():
-    logout_user()
-    return redirect(url_for('login'))
+    session.clear()
+    return redirect(url_for('login_page'))
 
 @app.route('/')
 @login_required
 def ana_ekran():
-    return render_template('index.html')
+    return render_template('index.html', show_login=False)
 
-# ---------- OYUN ENDPOINT'LERİ (TAMAMI) ----------
+# ---------- OYUN ENDPOINT'LERİ ----------
 @app.route('/kaydet', methods=['POST'])
 @login_required
 def oyunu_kaydet():
     try:
         data = request.json
+        user_id = session['user_id']
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = SmartCursor(conn)
         cursor.execute('''UPDATE oyun_kaydi SET 
             bakiye=%s, taraftar=%s, tiklamaGucu=%s, saniyeGeliri=%s, 
             marketEsyalari=%s, level=%s, xp=%s, mesajlar=%s, 
@@ -426,7 +424,7 @@ def oyunu_kaydet():
              json.dumps(data['marketEsyalari']), data['level'], data['xp'],
              json.dumps(data['mesajlar']), json.dumps(data.get('alinanOduller', [])),
              data.get('prestij', 0), json.dumps(data.get('personeller', {})),
-             data.get('toplamTiklama', 0), current_user.id))
+             data.get('toplamTiklama', 0), user_id))
         conn.commit()
         conn.close()
         return jsonify({"durum": "basarili"})
@@ -437,10 +435,11 @@ def oyunu_kaydet():
 @login_required
 def oyunu_yukle():
     try:
+        user_id = session['user_id']
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = SmartCursor(conn)
         cursor.execute('''SELECT bakiye, taraftar, tiklamaGucu, saniyeGeliri, marketEsyalari, level, xp, mesajlar, alinan_oduller, prestij, personeller, toplam_tiklama, son_giris, gunluk_odul_alinmis 
-                         FROM oyun_kaydi WHERE user_id=%s''', (current_user.id,))
+                         FROM oyun_kaydi WHERE user_id=%s''', (user_id,))
         satir = cursor.fetchone()
         conn.close()
         if satir:
@@ -468,9 +467,10 @@ def oyunu_yukle():
 @login_required
 def prestij_islem():
     try:
+        user_id = session['user_id']
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+        cursor = SmartCursor(conn)
+        cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (user_id,))
         mevcut_prestij = cursor.fetchone()[0]
         yeni_prestij = mevcut_prestij + 1
         default_market = {"enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0}, "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0}, "kamera": {"fiyat": 500, "tur": "tiklama", "guc": 8, "fiyatArtisi": 1.7, "gerekenTaraftar": 0}, "klavye": {"fiyat": 1200, "tur": "tiklama", "guc": 15, "fiyatArtisi": 1.8, "gerekenTaraftar": 0}, "amator": {"fiyat": 300, "tur": "pasif", "guc": 3, "fiyatArtisi": 1.5, "gerekenTaraftar": 0}, "yesilekran": {"fiyat": 800, "tur": "pasif", "guc": 10, "fiyatArtisi": 1.6, "gerekenTaraftar": 50}, "yildiz": {"fiyat": 2000, "tur": "pasif", "guc": 20, "fiyatArtisi": 1.7, "gerekenTaraftar": 0}, "moderator": {"fiyat": 4500, "tur": "pasif", "guc": 40, "fiyatArtisi": 1.8, "gerekenTaraftar": 100}, "reklam": {"fiyat": 10000, "tur": "pasif", "guc": 80, "fiyatArtisi": 1.9, "gerekenTaraftar": 150}, "yayinevi": {"fiyat": 25000, "tur": "pasif", "guc": 200, "fiyatArtisi": 2.0, "gerekenTaraftar": 300}, "espor": {"fiyat": 60000, "tur": "pasif", "guc": 500, "fiyatArtisi": 2.1, "gerekenTaraftar": 500}, "globalturnuva": {"fiyat": 150000, "tur": "pasif", "guc": 1200, "fiyatArtisi": 2.2, "gerekenTaraftar": 1000}}
@@ -480,8 +480,8 @@ def prestij_islem():
             marketEsyalari=%s, level=1, xp=0, mesajlar=%s, 
             alinan_oduller=%s, prestij=%s, personeller=%s, toplam_tiklama=0
             WHERE user_id=%s''',
-            (json.dumps(default_market), json.dumps([]), json.dumps([]), yeni_prestij, json.dumps(default_personeller), current_user.id))
-        cursor.execute('UPDATE yayin_istatistikleri SET toplam_yayin_suresi=0, toplam_kazanilan_para=0, toplam_kazanilan_taraftar=0, toplam_tiklama=0, en_yuksek_gelir=0 WHERE user_id=%s', (current_user.id,))
+            (json.dumps(default_market), json.dumps([]), json.dumps([]), yeni_prestij, json.dumps(default_personeller), user_id))
+        cursor.execute('UPDATE yayin_istatistikleri SET toplam_yayin_suresi=0, toplam_kazanilan_para=0, toplam_kazanilan_taraftar=0, toplam_tiklama=0, en_yuksek_gelir=0 WHERE user_id=%s', (user_id,))
         conn.commit()
         conn.close()
         return jsonify({"durum": "basarili"})
@@ -492,9 +492,10 @@ def prestij_islem():
 @login_required
 def teklif_al():
     try:
+        user_id = session['user_id']
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT saniyeGeliri, level, prestij, mesajlar FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+        cursor = SmartCursor(conn)
+        cursor.execute('SELECT saniyeGeliri, level, prestij, mesajlar FROM oyun_kaydi WHERE user_id=%s', (user_id,))
         satir = cursor.fetchone()
         saniye_geliri = satir[0] if satir[0] > 0 else 10
         level = satir[1]
@@ -524,7 +525,7 @@ def teklif_al():
             "kazanc_bakiye": secilen["k_bakiye"],
             "kazanc_taraftar": secilen["k_taraftar"]
         })
-        cursor.execute('UPDATE oyun_kaydi SET mesajlar=%s WHERE user_id=%s', (json.dumps(mesajlar), current_user.id))
+        cursor.execute('UPDATE oyun_kaydi SET mesajlar=%s WHERE user_id=%s', (json.dumps(mesajlar), user_id))
         conn.commit()
         conn.close()
         return jsonify({"durum": "basarili"})
@@ -538,9 +539,10 @@ def teklif_islem():
         data = request.json
         islem_id = data.get('id')
         aksiyon = data.get('aksiyon')
+        user_id = session['user_id']
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT bakiye, taraftar, mesajlar FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+        cursor = SmartCursor(conn)
+        cursor.execute('SELECT bakiye, taraftar, mesajlar FROM oyun_kaydi WHERE user_id=%s', (user_id,))
         satir = cursor.fetchone()
         bakiye, taraftar, mesajlar = satir[0], satir[1], json.loads(satir[2]) if satir[2] else []
         teklif = next((m for m in mesajlar if m.get('id') == islem_id), None)
@@ -556,7 +558,7 @@ def teklif_islem():
             bakiye += teklif.get('kazanc_bakiye', 0)
             taraftar += teklif.get('kazanc_taraftar', 0)
         mesajlar = [m for m in mesajlar if m.get('id') != islem_id]
-        cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, mesajlar=%s WHERE user_id=%s', (bakiye, taraftar, json.dumps(mesajlar), current_user.id))
+        cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, mesajlar=%s WHERE user_id=%s', (bakiye, taraftar, json.dumps(mesajlar), user_id))
         conn.commit()
         conn.close()
         return jsonify({"durum": "basarili"})
@@ -566,9 +568,10 @@ def teklif_islem():
 @app.route('/gunluk_odul', methods=['GET'])
 @login_required
 def gunluk_odul():
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT son_giris, gunluk_odul_alinmis FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT son_giris, gunluk_odul_alinmis FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     son_giris, alinmis = cursor.fetchone()
     son_giris = datetime.fromisoformat(son_giris) if son_giris else datetime.now()
     bugun = datetime.now().date()
@@ -583,9 +586,10 @@ def gunluk_odul():
 @app.route('/gunluk_odul_al', methods=['POST'])
 @login_required
 def gunluk_odul_al():
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT gunluk_odul_alinmis FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT gunluk_odul_alinmis FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     alinmis = cursor.fetchone()[0]
     if alinmis:
         conn.close()
@@ -593,9 +597,9 @@ def gunluk_odul_al():
     odul_bakiye = 100 + random.randint(0, 50)
     odul_taraftar = 10 + random.randint(0, 10)
     cursor.execute('UPDATE oyun_kaydi SET bakiye = bakiye + %s, taraftar = taraftar + %s, son_giris = %s, gunluk_odul_alinmis = TRUE WHERE user_id=%s',
-                   (odul_bakiye, odul_taraftar, datetime.now(), current_user.id))
+                   (odul_bakiye, odul_taraftar, datetime.now(), user_id))
     cursor.execute('UPDATE yayin_istatistikleri SET toplam_kazanilan_para = toplam_kazanilan_para + %s, toplam_kazanilan_taraftar = toplam_kazanilan_taraftar + %s WHERE user_id=%s',
-                   (odul_bakiye, odul_taraftar, current_user.id))
+                   (odul_bakiye, odul_taraftar, user_id))
     conn.commit()
     conn.close()
     return jsonify({"durum": "basarili", "odul_bakiye": odul_bakiye, "odul_taraftar": odul_taraftar})
@@ -603,9 +607,10 @@ def gunluk_odul_al():
 @app.route('/istatistikler', methods=['GET'])
 @login_required
 def istatistikler():
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT toplam_yayin_suresi, toplam_kazanilan_para, toplam_kazanilan_taraftar, toplam_tiklama, en_yuksek_gelir FROM yayin_istatistikleri WHERE user_id=%s', (current_user.id,))
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT toplam_yayin_suresi, toplam_kazanilan_para, toplam_kazanilan_taraftar, toplam_tiklama, en_yuksek_gelir FROM yayin_istatistikleri WHERE user_id=%s', (user_id,))
     istatistik = cursor.fetchone()
     conn.close()
     if istatistik:
@@ -622,7 +627,7 @@ def istatistikler():
 @login_required
 def etkinlikler_listesi():
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
     simdi = datetime.now()
     cursor.execute('SELECT id, name, description, baslangic, bitis, reward_type, reward_amount FROM etkinlikler WHERE aktif=TRUE')
     etkinlikler = cursor.fetchall()
@@ -643,9 +648,10 @@ def etkinlikler_listesi():
 @app.route('/etkinlik_progress', methods=['GET'])
 @login_required
 def etkinlik_progress():
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT etkinlik_id, progress, tamamlandi FROM kullanici_etkinlik_progress WHERE user_id=%s', (current_user.id,))
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT etkinlik_id, progress, tamamlandi FROM kullanici_etkinlik_progress WHERE user_id=%s', (user_id,))
     progress = cursor.fetchall()
     conn.close()
     return jsonify([{'etkinlik_id': p[0], 'progress': p[1], 'tamamlandi': bool(p[2])} for p in progress])
@@ -655,19 +661,20 @@ def etkinlik_progress():
 def etkinlik_tamamla():
     data = request.json
     etkinlik_id = data.get('etkinlik_id')
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
     cursor.execute('SELECT reward_type, reward_amount FROM etkinlikler WHERE id=%s AND aktif=TRUE', (etkinlik_id,))
     etkinlik = cursor.fetchone()
     if not etkinlik:
         conn.close()
         return jsonify({"durum": "hata", "mesaj": "Etkinlik bulunamadı"})
-    cursor.execute('SELECT tamamlandi FROM kullanici_etkinlik_progress WHERE user_id=%s AND etkinlik_id=%s', (current_user.id, etkinlik_id))
+    cursor.execute('SELECT tamamlandi FROM kullanici_etkinlik_progress WHERE user_id=%s AND etkinlik_id=%s', (user_id, etkinlik_id))
     satir = cursor.fetchone()
     if satir and satir[0]:
         conn.close()
         return jsonify({"durum": "hata", "mesaj": "Zaten tamamlanmış"})
-    cursor.execute('SELECT bakiye, taraftar, tiklamaGucu FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor.execute('SELECT bakiye, taraftar, tiklamaGucu FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     oyuncu = cursor.fetchone()
     bakiye, taraftar, tiklamaGucu = oyuncu
     if etkinlik[0] == 'bakiye':
@@ -676,8 +683,8 @@ def etkinlik_tamamla():
         taraftar += etkinlik[1]
     elif etkinlik[0] == 'tiklamaGucu':
         tiklamaGucu += etkinlik[1]
-    cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, tiklamaGucu=%s WHERE user_id=%s', (bakiye, taraftar, tiklamaGucu, current_user.id))
-    cursor.execute('INSERT INTO kullanici_etkinlik_progress (user_id, etkinlik_id, progress, tamamlandi) VALUES (%s, %s, %s, TRUE) ON CONFLICT (user_id, etkinlik_id) DO UPDATE SET tamamlandi=TRUE', (current_user.id, etkinlik_id, etkinlik[1]))
+    cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, tiklamaGucu=%s WHERE user_id=%s', (bakiye, taraftar, tiklamaGucu, user_id))
+    cursor.execute('INSERT INTO kullanici_etkinlik_progress (user_id, etkinlik_id, progress, tamamlandi) VALUES (%s, %s, %s, TRUE) ON CONFLICT (user_id, etkinlik_id) DO UPDATE SET tamamlandi=TRUE', (user_id, etkinlik_id, etkinlik[1]))
     conn.commit()
     conn.close()
     return jsonify({"durum": "basarili", "reward_type": etkinlik[0], "reward_amount": etkinlik[1]})
@@ -685,15 +692,17 @@ def etkinlik_tamamla():
 @app.route('/liderlik', methods=['GET'])
 @login_required
 def liderlik():
+    user_id = session['user_id']
+    username = session['username']
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT prestij, level, toplam_gelir, toplam_taraftar FROM liderlik WHERE user_id=%s', (current_user.id,))
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT prestij, level, toplam_gelir, toplam_taraftar FROM liderlik WHERE user_id=%s', (user_id,))
     lider = cursor.fetchone()
     conn.close()
     if lider:
         return jsonify([{
             'sira': 1,
-            'kullanici': current_user.username,
+            'kullanici': username,
             'prestij': lider[0],
             'level': lider[1],
             'toplam_gelir': lider[2],
@@ -704,9 +713,10 @@ def liderlik():
 @app.route('/achievements', methods=['GET'])
 @login_required
 def achievements():
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT toplam_tiklama, taraftar, saniyeGeliri, level, prestij FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT toplam_tiklama, taraftar, saniyeGeliri, level, prestij FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     oyuncu = cursor.fetchone()
     cursor.execute('SELECT id, name, description, icon, condition_type, condition_value, reward_type, reward_amount FROM achievements')
     tum_basarimlar = cursor.fetchall()
@@ -735,11 +745,12 @@ def achievements():
 @app.route('/daily_quests', methods=['GET'])
 @login_required
 def daily_quests():
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
     cursor.execute('SELECT id, name, description, condition_type, condition_value, reward_type, reward_amount FROM daily_quests')
     gorevler = cursor.fetchall()
-    cursor.execute('SELECT toplam_tiklama, taraftar FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor.execute('SELECT toplam_tiklama, taraftar FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     oyuncu = cursor.fetchone()
     sonuc = []
     for g in gorevler:
@@ -765,14 +776,15 @@ def daily_quests():
 def claim_daily_quest():
     data = request.json
     quest_id = data.get('quest_id')
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
     cursor.execute('SELECT reward_type, reward_amount, condition_type, condition_value FROM daily_quests WHERE id=%s', (quest_id,))
     gorev = cursor.fetchone()
     if not gorev:
         conn.close()
         return jsonify({'durum': 'hata', 'mesaj': 'Geçersiz görev'})
-    cursor.execute('SELECT toplam_tiklama, taraftar FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor.execute('SELECT toplam_tiklama, taraftar FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     oyuncu = cursor.fetchone()
     progress = 0
     if gorev[2] == 'toplam_tiklama':
@@ -784,7 +796,7 @@ def claim_daily_quest():
     if progress < gorev[3]:
         conn.close()
         return jsonify({'durum': 'hata', 'mesaj': 'Görev henüz tamamlanmamış!'})
-    cursor.execute('SELECT bakiye, taraftar, tiklamaGucu FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor.execute('SELECT bakiye, taraftar, tiklamaGucu FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     oyuncu2 = cursor.fetchone()
     bakiye, taraftar, tiklamaGucu = oyuncu2
     if gorev[0] == 'bakiye':
@@ -793,9 +805,9 @@ def claim_daily_quest():
         taraftar += gorev[1]
     elif gorev[0] == 'tiklamaGucu':
         tiklamaGucu += gorev[1]
-    cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, tiklamaGucu=%s WHERE user_id=%s', (bakiye, taraftar, tiklamaGucu, current_user.id))
+    cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, tiklamaGucu=%s WHERE user_id=%s', (bakiye, taraftar, tiklamaGucu, user_id))
     bugun = datetime.now().date()
-    cursor.execute('INSERT INTO daily_quest_progress (user_id, quest_id, progress, completed, date) VALUES (%s, %s, %s, TRUE, %s) ON CONFLICT (user_id, quest_id, date) DO UPDATE SET progress=%s, completed=TRUE', (current_user.id, quest_id, progress, bugun, progress))
+    cursor.execute('INSERT INTO daily_quest_progress (user_id, quest_id, progress, completed, date) VALUES (%s, %s, %s, TRUE, %s) ON CONFLICT (user_id, quest_id, date) DO UPDATE SET progress=%s, completed=TRUE', (user_id, quest_id, progress, bugun, progress))
     conn.commit()
     conn.close()
     return jsonify({'durum': 'basarili'})
@@ -803,11 +815,12 @@ def claim_daily_quest():
 @app.route('/studio_decorations', methods=['GET'])
 @login_required
 def studio_decorations():
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
     cursor.execute('SELECT id, name, description, icon, price, bonus_type, bonus_value, is_special, required_prestige FROM studio_decorations')
     dekorlar = cursor.fetchall()
-    cursor.execute('SELECT decoration_id, equipped FROM user_decorations WHERE user_id=%s', (current_user.id,))
+    cursor.execute('SELECT decoration_id, equipped FROM user_decorations WHERE user_id=%s', (user_id,))
     sahip_olanlar = {row[0]: row[1] for row in cursor.fetchall()}
     conn.close()
     sonuc = []
@@ -826,26 +839,27 @@ def studio_decorations():
 def buy_decoration():
     data = request.json
     deco_id = data.get('decoration_id')
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
     cursor.execute('SELECT price, is_special, required_prestige FROM studio_decorations WHERE id=%s', (deco_id,))
     dekor = cursor.fetchone()
     if not dekor:
         conn.close()
         return jsonify({'durum': 'hata', 'mesaj': 'Dekorasyon bulunamadı'})
     if dekor[1]:
-        cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+        cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (user_id,))
         prestij = cursor.fetchone()[0]
         if prestij < dekor[2]:
             conn.close()
             return jsonify({'durum': 'hata', 'mesaj': 'Bu dekorasyon için yeterli prestij seviyesine sahip değilsin'})
-    cursor.execute('SELECT bakiye FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor.execute('SELECT bakiye FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     bakiye = cursor.fetchone()[0]
     if bakiye < dekor[0]:
         conn.close()
         return jsonify({'durum': 'hata', 'mesaj': 'Yetersiz bakiye'})
-    cursor.execute('UPDATE oyun_kaydi SET bakiye = bakiye - %s WHERE user_id=%s', (dekor[0], current_user.id))
-    cursor.execute('INSERT INTO user_decorations (user_id, decoration_id, purchased_at, equipped) VALUES (%s, %s, %s, FALSE)', (current_user.id, deco_id, datetime.now()))
+    cursor.execute('UPDATE oyun_kaydi SET bakiye = bakiye - %s WHERE user_id=%s', (dekor[0], user_id))
+    cursor.execute('INSERT INTO user_decorations (user_id, decoration_id, purchased_at, equipped) VALUES (%s, %s, %s, FALSE)', (user_id, deco_id, datetime.now()))
     conn.commit()
     conn.close()
     return jsonify({'durum': 'basarili'})
@@ -855,10 +869,11 @@ def buy_decoration():
 def equip_decoration():
     data = request.json
     deco_id = data.get('decoration_id')
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('UPDATE user_decorations SET equipped = FALSE WHERE user_id=%s', (current_user.id,))
-    cursor.execute('UPDATE user_decorations SET equipped = TRUE WHERE user_id=%s AND decoration_id=%s', (current_user.id, deco_id))
+    cursor = SmartCursor(conn)
+    cursor.execute('UPDATE user_decorations SET equipped = FALSE WHERE user_id=%s', (user_id,))
+    cursor.execute('UPDATE user_decorations SET equipped = TRUE WHERE user_id=%s AND decoration_id=%s', (user_id, deco_id))
     conn.commit()
     conn.close()
     return jsonify({'durum': 'basarili'})
@@ -868,8 +883,9 @@ def equip_decoration():
 def open_lootbox():
     data = request.json
     box_id = data.get('box_id')
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
     cursor.execute('SELECT reward_pool FROM loot_boxes WHERE id=%s', (box_id,))
     result = cursor.fetchone()
     if not result:
@@ -886,7 +902,7 @@ def open_lootbox():
             break
     if not secilen:
         secilen = pool[-1]
-    cursor.execute('SELECT bakiye, taraftar, tiklamaGucu FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor.execute('SELECT bakiye, taraftar, tiklamaGucu FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     oyuncu = cursor.fetchone()
     bakiye, taraftar, tiklamaGucu = oyuncu
     if secilen['tip'] == 'bakiye':
@@ -895,8 +911,8 @@ def open_lootbox():
         taraftar += secilen['miktar']
     elif secilen['tip'] == 'tiklamaGucu':
         tiklamaGucu += secilen['miktar']
-    cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, tiklamaGucu=%s WHERE user_id=%s', (bakiye, taraftar, tiklamaGucu, current_user.id))
-    cursor.execute('INSERT INTO user_loot_history (user_id, loot_id, reward_type, reward_amount, opened_at) VALUES (%s, %s, %s, %s, %s)', (current_user.id, box_id, secilen['tip'], secilen['miktar'], datetime.now()))
+    cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, tiklamaGucu=%s WHERE user_id=%s', (bakiye, taraftar, tiklamaGucu, user_id))
+    cursor.execute('INSERT INTO user_loot_history (user_id, loot_id, reward_type, reward_amount, opened_at) VALUES (%s, %s, %s, %s, %s)', (user_id, box_id, secilen['tip'], secilen['miktar'], datetime.now()))
     conn.commit()
     conn.close()
     return jsonify({'durum': 'basarili', 'reward_type': secilen['tip'], 'reward_amount': secilen['miktar']})
@@ -904,9 +920,10 @@ def open_lootbox():
 @app.route('/prestige_special_items', methods=['GET'])
 @login_required
 def prestige_special_items():
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     prestij = cursor.fetchone()[0]
     cursor.execute('SELECT id, name, description, icon, required_prestige, bonus_type, bonus_value FROM prestige_special_items WHERE required_prestige <= %s', (prestij,))
     items = cursor.fetchall()
@@ -920,7 +937,7 @@ def prestige_special_items():
 @login_required
 def ai_opponents():
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
     rakipler = cursor.execute('SELECT id, income, followers, level, growth_rate, last_updated FROM ai_opponents').fetchall()
     simdi = datetime.now()
     for r in rakipler:
@@ -943,17 +960,18 @@ def ai_opponents():
 def challenge_ai():
     data = request.json
     ai_id = data.get('ai_id')
+    user_id = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = SmartCursor(conn)
     cursor.execute('SELECT income, followers FROM ai_opponents WHERE id=%s', (ai_id,))
     rakip = cursor.fetchone()
-    cursor.execute('SELECT bakiye, taraftar, saniyeGeliri FROM oyun_kaydi WHERE user_id=%s', (current_user.id,))
+    cursor.execute('SELECT bakiye, taraftar, saniyeGeliri FROM oyun_kaydi WHERE user_id=%s', (user_id,))
     oyuncu = cursor.fetchone()
     oyuncu_puan = oyuncu[2] * 2 + oyuncu[1]
     rakip_puan = rakip[0] * 2 + rakip[1]
     if oyuncu_puan > rakip_puan:
         odul = random.randint(100, 500)
-        cursor.execute('UPDATE oyun_kaydi SET bakiye = bakiye + %s WHERE user_id=%s', (odul, current_user.id))
+        cursor.execute('UPDATE oyun_kaydi SET bakiye = bakiye + %s WHERE user_id=%s', (odul, user_id))
         conn.commit()
         conn.close()
         return jsonify({'durum': 'kazandi', 'odul': odul})
