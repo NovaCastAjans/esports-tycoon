@@ -11,7 +11,7 @@ from psycopg2.extras import RealDictCursor
 app = Flask(__name__)
 app.secret_key = 'çok_gizli_bir_anahtar_değiştir_bunu'
 
-# ---------- SMART CURSOR (SQLite/PostgreSQL uyumlu) ----------
+# ---------- SMART CURSOR ----------
 class SmartCursor:
     def __init__(self, conn):
         self.conn = conn
@@ -270,9 +270,10 @@ def veritabani_kur():
             {'tip': 'taraftar', 'miktar': 100, 'agirlik': 25},
             {'tip': 'tiklamaGucu', 'miktar': 10, 'agirlik': 20},
         ])
-        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s)', (1, bronz_pool))
-        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s)', (2, gumus_pool))
-        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s)', (3, altin_pool))
+        # Düzeltme: 3 sütun için 3 değer
+        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s, %s)', (1, 'Bronz Kutu', bronz_pool))
+        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s, %s)', (2, 'Gümüş Kutu', gumus_pool))
+        cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s, %s)', (3, 'Altın Kutu', altin_pool))
 
     cursor.execute('SELECT COUNT(*) FROM prestige_special_items')
     if cursor.fetchone()[0] == 0:
@@ -401,7 +402,7 @@ def logout():
 def ana_ekran():
     return render_template('index.html', show_login=False)
 
-# ---------- OYUN ENDPOINT'LERİ (TÜMÜ) ----------
+# ---------- OYUN ENDPOINT'LERİ ----------
 @app.route('/kaydet', methods=['POST'])
 @login_required
 def oyunu_kaydet():
