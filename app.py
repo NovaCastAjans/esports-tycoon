@@ -2,6 +2,7 @@ import os
 import json
 import random
 from datetime import datetime, timedelta
+from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import sqlite3
 import psycopg2
@@ -54,8 +55,7 @@ def veritabani_kur():
     conn = get_db_connection()
     cursor = SmartCursor(conn)
 
-    # Tüm tabloları oluştur (öncekiyle aynı)
-    # Kullanıcı
+    # Kullanıcı tablosu (sadece username)
     if isinstance(conn, sqlite3.Connection):
         cursor.execute('''CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,6 +69,7 @@ def veritabani_kur():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
 
+    # Oyun kaydı
     cursor.execute('''CREATE TABLE IF NOT EXISTS oyun_kaydi (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id),
@@ -318,17 +319,16 @@ def format_para(sayi):
     if sayi >= 1e3: return f"{sayi/1e3:.1f}K"
     return str(int(sayi))
 
-# ---------- YARDIMCI FONKSİYONLAR ----------
-def get_user_id(username):
-    conn = get_db_connection()
-    cursor = SmartCursor(conn)
-    cursor.execute('SELECT id FROM users WHERE username = %s', (username,))
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        return row[0]
-    return None
+# ---------- LOGIN REQUIRED DECORATOR ----------
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
 
+# ---------- YARDIMCI FONKSİYONLAR ----------
 def get_or_create_user(username):
     conn = get_db_connection()
     cursor = SmartCursor(conn)
@@ -337,13 +337,8 @@ def get_or_create_user(username):
     if row:
         user_id = row[0]
     else:
-        if isinstance(conn, sqlite3.Connection):
-            cursor.execute('INSERT INTO users (username) VALUES (?)', (username,))
-            user_id = cursor.cursor.lastrowid
-        else:
-            cursor.execute('INSERT INTO users (username) VALUES (%s) RETURNING id', (username,))
-            user_id = cursor.fetchone()[0]
-
+        cursor.execute('INSERT INTO users (username) VALUES (%s) RETURNING id', (username,))
+        user_id = cursor.fetchone()[0]
         default_market = {
             "enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
             "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0},
@@ -373,15 +368,6 @@ def get_or_create_user(username):
     conn.close()
     return user_id
 
-def login_required(f):
-    from functools import wraps
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'username' not in session:
-            return redirect(url_for('login_page'))
-        return f(*args, **kwargs)
-    return decorated_function
-
 # ---------- AUTH ROUTES ----------
 @app.route('/login', methods=['GET', 'POST'])
 def login_page():
@@ -391,8 +377,8 @@ def login_page():
             flash('Kullanıcı adı boş olamaz.', 'danger')
             return render_template('index.html', show_login=True)
         user_id = get_or_create_user(username)
-        session['username'] = username
         session['user_id'] = user_id
+        session['username'] = username
         return redirect(url_for('ana_ekran'))
     return render_template('index.html', show_login=True)
 
@@ -401,6 +387,7 @@ def logout():
     session.clear()
     return redirect(url_for('login_page'))
 
+# ---------- ANA SAYFA ----------
 @app.route('/')
 @login_required
 def ana_ekran():
