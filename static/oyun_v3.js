@@ -1,5 +1,45 @@
 console.log("Oyun v3 motoru aktif!");
+// ---------- SES SİSTEMİ ----------
+let sesAktif = true;
+let arkaPlanMuzik = null;
 
+function sesOynat(dosya) {
+    if (!sesAktif) return;
+    try {
+        const ses = new Audio('/static/sounds/' + dosya);
+        ses.volume = 0.3;
+        ses.play().catch(() => {});
+    } catch (e) {}
+}
+
+function sesToggle() {
+    sesAktif = !sesAktif;
+    const btn = document.getElementById('ses-butonu');
+    const icon = btn.querySelector('i');
+    if (sesAktif) {
+        btn.classList.remove('muted');
+        icon.className = 'fas fa-volume-up';
+        if (arkaPlanMuzik) {
+            arkaPlanMuzik.play().catch(() => {});
+        }
+    } else {
+        btn.classList.add('muted');
+        icon.className = 'fas fa-volume-mute';
+        if (arkaPlanMuzik) {
+            arkaPlanMuzik.pause();
+        }
+    }
+}
+
+function arkaPlanMuzikBaslat() {
+    if (!sesAktif) return;
+    try {
+        arkaPlanMuzik = new Audio('/static/sounds/background.mp3');
+        arkaPlanMuzik.loop = true;
+        arkaPlanMuzik.volume = 0.15;
+        arkaPlanMuzik.play().catch(() => {});
+    } catch (e) {}
+}
 // Global Değişkenler
 let bakiye = 0, taraftar = 0, tiklamaGucu = 1, saniyeGeliri = 0, level = 1, xp = 0, xpGereken = 100;
 let mesajlar = [], alinanOduller = [], marketEsyalari = {}, personeller = {}, prestij = 0;
@@ -109,6 +149,7 @@ window.teklifGoster = (teklif) => {
     kabulBtn.dataset.id = teklif.id;
     redBtn.dataset.id = teklif.id;
     modal.style.display = 'flex';
+    sesOynat('offer.mp3');
 };
 
 window.teklifIslem = async (id, aksiyon) => {
@@ -161,6 +202,7 @@ window.yayinaTikla = (event) => {
     window.oyunuKaydet();
     window.tiklamaEfektiOlustur(event);
     window.başarımlariKontrolEt();
+    sesOynat('click.mp3');
 };
 
 window.tiklamaEfektiOlustur = (event) => {
@@ -180,6 +222,7 @@ window.seviyeAtladı = () => {
         { tip: 'bakiye', miktar: Math.floor(level * 30) },
         { tip: 'taraftar', miktar: Math.floor(level * 2) },
         { tip: 'tiklamaGucu', miktar: 1 }
+        sesOynat('levelup.mp3');
     ];
     const secilen = oduller[Math.floor(Math.random() * oduller.length)];
     if (secilen.tip === 'bakiye') bakiye += secilen.miktar;
@@ -719,4 +762,5 @@ window.onload = async () => {
     await window.oyunuYukle();
     window.pasifGelirDongusu();
     window.teklifKontrol();
+    arkaPlanMuzikBaslat();
 };

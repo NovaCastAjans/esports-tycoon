@@ -440,3 +440,26 @@ body {
     .market-grid { grid-template-columns: 1fr; }
     .kart-grid { grid-template-columns: 1fr; }
 }
+/* Ses Butonu */
+.ses-btn {
+    background: transparent;
+    border: 2px solid #4a9eff;
+    color: #4a9eff;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ses-btn:hover {
+    background: #4a9eff22;
+    transform: scale(1.1);
+}
+.ses-btn.muted {
+    border-color: #ef4444;
+    color: #ef4444;
+}
