@@ -3,7 +3,9 @@ const urlsToCache = [
   '/',
   '/static/style.css',
   '/static/oyun_v3.js',
-  '/static/manifest.json'
+  '/static/manifest.json',
+  '/static/icon-192.png',
+  '/static/icon-512.png'
 ];
 
 self.addEventListener('install', event => {

@@ -431,15 +431,6 @@ body {
     cursor: not-allowed;
 }
 
-@media (max-width: 700px) {
-    .ust-panel { flex-direction: column; align-items: stretch; gap: 6px; padding: 10px 16px; }
-    .istatistik-grup { justify-content: space-around; }
-    .logo { justify-content: center; }
-    .sekme-menu { justify-content: center; }
-    .sekme-btn { font-size: 12px; padding: 6px 12px; }
-    .market-grid { grid-template-columns: 1fr; }
-    .kart-grid { grid-template-columns: 1fr; }
-}
 /* Ses Butonu */
 .ses-btn {
     background: transparent;
@@ -462,4 +453,14 @@ body {
 .ses-btn.muted {
     border-color: #ef4444;
     color: #ef4444;
+}
+
+@media (max-width: 700px) {
+    .ust-panel { flex-direction: column; align-items: stretch; gap: 6px; padding: 10px 16px; }
+    .istatistik-grup { justify-content: space-around; }
+    .logo { justify-content: center; }
+    .sekme-menu { justify-content: center; }
+    .sekme-btn { font-size: 12px; padding: 6px 12px; }
+    .market-grid { grid-template-columns: 1fr; }
+    .kart-grid { grid-template-columns: 1fr; }
 }

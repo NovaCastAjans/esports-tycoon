@@ -1,13 +1,5 @@
 console.log("Oyun v3 motoru aktif!");
 
-// Global Değişkenler
-let bakiye = 0, taraftar = 0, tiklamaGucu = 1, saniyeGeliri = 0, level = 1, xp = 0, xpGereken = 100;
-let mesajlar = [], alinanOduller = [], marketEsyalari = {}, personeller = {}, prestij = 0;
-let pasifInterval = null;
-let toplamTiklama = 0;
-let istatistikler = {};
-let gunlukOdulAlinmis = false;
-
 // ---------- SES SİSTEMİ ----------
 let sesAktif = true;
 let arkaPlanMuzik = null;
@@ -50,6 +42,14 @@ function arkaPlanMuzikBaslat() {
         arkaPlanMuzik.play().catch(() => {});
     } catch (e) {}
 }
+
+// ---------- GLOBAL DEĞİŞKENLER ----------
+let bakiye = 0, taraftar = 0, tiklamaGucu = 1, saniyeGeliri = 0, level = 1, xp = 0, xpGereken = 100;
+let mesajlar = [], alinanOduller = [], marketEsyalari = {}, personeller = {}, prestij = 0;
+let pasifInterval = null;
+let toplamTiklama = 0;
+let istatistikler = {};
+let gunlukOdulAlinmis = false;
 
 // ---------- PARA FORMATLAMA ----------
 function formatPara(sayi) {

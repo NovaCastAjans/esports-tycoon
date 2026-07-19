@@ -270,7 +270,6 @@ def veritabani_kur():
             {'tip': 'taraftar', 'miktar': 100, 'agirlik': 25},
             {'tip': 'tiklamaGucu', 'miktar': 10, 'agirlik': 20},
         ])
-        # Düzeltme: 3 sütun için 3 değer
         cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s, %s)', (1, 'Bronz Kutu', bronz_pool))
         cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s, %s)', (2, 'Gümüş Kutu', gumus_pool))
         cursor.execute('INSERT INTO loot_boxes (id, name, reward_pool) VALUES (%s, %s, %s)', (3, 'Altın Kutu', altin_pool))
@@ -338,7 +337,7 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# ---------- YARDIMCI FONKSİYONLAR ----------
+# ---------- YARDIMCI FONKSİYON ----------
 def get_or_create_user(username):
     conn = get_db_connection()
     cursor = SmartCursor(conn)
@@ -347,8 +346,13 @@ def get_or_create_user(username):
     if row:
         user_id = row[0]
     else:
-        cursor.execute('INSERT INTO users (username) VALUES (%s) RETURNING id', (username,))
-        user_id = cursor.fetchone()[0]
+        if isinstance(conn, sqlite3.Connection):
+            cursor.execute('INSERT INTO users (username) VALUES (%s)', (username,))
+            user_id = cursor.lastrowid
+        else:
+            cursor.execute('INSERT INTO users (username) VALUES (%s) RETURNING id', (username,))
+            user_id = cursor.fetchone()[0]
+
         default_market = {
             "enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
             "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0},
