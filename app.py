@@ -401,7 +401,7 @@ def logout():
 def ana_ekran():
     return render_template('index.html', show_login=False)
 
-# ---------- OYUN ENDPOINT'LERİ ----------
+# ---------- OYUN ENDPOINT'LERİ (TÜMÜ) ----------
 @app.route('/kaydet', methods=['POST'])
 @login_required
 def oyunu_kaydet():
@@ -458,7 +458,521 @@ def oyunu_yukle():
     except Exception as e:
         return jsonify({"durum": "hata", "mesaj": str(e)}), 500
 
-# Diğer tüm endpoint'ler (prestij_yap, teklif_al, teklif_islem, gunluk_odul, gunluk_odul_al, istatistikler, etkinlikler, etkinlik_progress, etkinlik_tamamla, liderlik, achievements, daily_quests, claim_daily_quest, studio_decorations, buy_decoration, equip_decoration, open_lootbox, prestige_special_items, ai_opponents, challenge_ai) aynen kalır, sadece current_user.id yerine session['user_id'] kullanılır. Kısalık için hepsini buraya yazmıyorum ama kullandığın dosyada hepsi mevcut olmalı.
+@app.route('/prestij_yap', methods=['POST'])
+@login_required
+def prestij_islem():
+    try:
+        user_id = session['user_id']
+        conn = get_db_connection()
+        cursor = SmartCursor(conn)
+        cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+        mevcut_prestij = cursor.fetchone()[0]
+        yeni_prestij = mevcut_prestij + 1
+        default_market = {"enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0}, "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0}, "kamera": {"fiyat": 500, "tur": "tiklama", "guc": 8, "fiyatArtisi": 1.7, "gerekenTaraftar": 0}, "klavye": {"fiyat": 1200, "tur": "tiklama", "guc": 15, "fiyatArtisi": 1.8, "gerekenTaraftar": 0}, "amator": {"fiyat": 300, "tur": "pasif", "guc": 3, "fiyatArtisi": 1.5, "gerekenTaraftar": 0}, "yesilekran": {"fiyat": 800, "tur": "pasif", "guc": 10, "fiyatArtisi": 1.6, "gerekenTaraftar": 50}, "yildiz": {"fiyat": 2000, "tur": "pasif", "guc": 20, "fiyatArtisi": 1.7, "gerekenTaraftar": 0}, "moderator": {"fiyat": 4500, "tur": "pasif", "guc": 40, "fiyatArtisi": 1.8, "gerekenTaraftar": 100}, "reklam": {"fiyat": 10000, "tur": "pasif", "guc": 80, "fiyatArtisi": 1.9, "gerekenTaraftar": 150}, "yayinevi": {"fiyat": 25000, "tur": "pasif", "guc": 200, "fiyatArtisi": 2.0, "gerekenTaraftar": 300}, "espor": {"fiyat": 60000, "tur": "pasif", "guc": 500, "fiyatArtisi": 2.1, "gerekenTaraftar": 500}, "globalturnuva": {"fiyat": 150000, "tur": "pasif", "guc": 1200, "fiyatArtisi": 2.2, "gerekenTaraftar": 1000}}
+        default_personeller = {"sosyal_medyaci": {"fiyat": 15000, "alinma": 0, "gerekenTaraftar": 200}, "vergi_uzmani": {"fiyat": 50000, "alinma": 0, "gerekenTaraftar": 600}, "kurgucu": {"fiyat": 120000, "alinma": 0, "gerekenTaraftar": 1500}}
+        cursor.execute('''UPDATE oyun_kaydi SET 
+            bakiye=0, taraftar=0, tiklamaGucu=1, saniyeGeliri=0, 
+            marketEsyalari=%s, level=1, xp=0, mesajlar=%s, 
+            alinan_oduller=%s, prestij=%s, personeller=%s, toplam_tiklama=0
+            WHERE user_id=%s''',
+            (json.dumps(default_market), json.dumps([]), json.dumps([]), yeni_prestij, json.dumps(default_personeller), user_id))
+        cursor.execute('UPDATE yayin_istatistikleri SET toplam_yayin_suresi=0, toplam_kazanilan_para=0, toplam_kazanilan_taraftar=0, toplam_tiklama=0, en_yuksek_gelir=0 WHERE user_id=%s', (user_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"durum": "basarili"})
+    except Exception as e:
+        return jsonify({"durum": "hata", "mesaj": str(e)}), 500
+
+@app.route('/teklif_al', methods=['POST'])
+@login_required
+def teklif_al():
+    try:
+        user_id = session['user_id']
+        conn = get_db_connection()
+        cursor = SmartCursor(conn)
+        cursor.execute('SELECT saniyeGeliri, level, prestij, mesajlar FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+        satir = cursor.fetchone()
+        saniye_geliri = satir[0] if satir[0] > 0 else 10
+        level = satir[1]
+        prestij = satir[2]
+        mesajlar = json.loads(satir[3]) if satir[3] else []
+        if len(mesajlar) > 0:
+            conn.close()
+            return jsonify({"durum": "bekle"})
+        temel_kazanc = saniye_geliri * 30
+        seviye_bonusu = 1.0 + (level * 0.03)
+        carpan = seviye_bonusu * (1.0 + prestij * 0.2)
+        temel_bakiye = int(temel_kazanc * carpan)
+        temel_taraftar = int(5 + (level * 1.5) * (1.0 + (prestij*0.3)))
+        teklif_turleri = [
+            {"tip": "yatirim", "baslik": "🎁 Çekiliş", "metin": f"{format_para(temel_bakiye * 0.6)}₺ harcayıp {int(temel_taraftar * 2)} taraftar kazan.", "m_bakiye": int(temel_bakiye * 0.6), "m_taraftar": 0, "k_bakiye": 0, "k_taraftar": int(temel_taraftar * 2)},
+            {"tip": "agresif", "baslik": "📺 Reklam", "metin": f"{int(temel_taraftar * 0.8)} taraftar kaybedip {format_para(temel_bakiye * 2)}₺ kazan.", "m_bakiye": 0, "m_taraftar": int(temel_taraftar * 0.8), "k_bakiye": int(temel_bakiye * 2), "k_taraftar": 0},
+            {"tip": "turnuva", "baslik": "🏆 Turnuva", "metin": f"{format_para(temel_bakiye * 0.4)}₺ yatır, kazanırsan {format_para(temel_bakiye * 1.2)}₺ ve {temel_taraftar} taraftar.", "m_bakiye": int(temel_bakiye * 0.4), "m_taraftar": 0, "k_bakiye": int(temel_bakiye * 1.2), "k_taraftar": temel_taraftar},
+            {"tip": "sponsor", "baslik": "🤝 Sponsor", "metin": f"{format_para(temel_bakiye * 0.8)}₺ ve {int(temel_taraftar * 0.5)} taraftar kazan.", "m_bakiye": 0, "m_taraftar": 0, "k_bakiye": int(temel_bakiye * 0.8), "k_taraftar": int(temel_taraftar * 0.5)}
+        ]
+        secilen = random.choice(teklif_turleri)
+        mesajlar.append({
+            "id": random.randint(10000, 99999),
+            "baslik": secilen["baslik"],
+            "metin": secilen["metin"],
+            "maliyet_bakiye": secilen["m_bakiye"],
+            "maliyet_taraftar": secilen["m_taraftar"],
+            "kazanc_bakiye": secilen["k_bakiye"],
+            "kazanc_taraftar": secilen["k_taraftar"]
+        })
+        cursor.execute('UPDATE oyun_kaydi SET mesajlar=%s WHERE user_id=%s', (json.dumps(mesajlar), user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({"durum": "basarili"})
+    except Exception as e:
+        return jsonify({"durum": "hata", "mesaj": str(e)}), 500
+
+@app.route('/teklif_islem', methods=['POST'])
+@login_required
+def teklif_islem():
+    try:
+        data = request.json
+        islem_id = data.get('id')
+        aksiyon = data.get('aksiyon')
+        user_id = session['user_id']
+        conn = get_db_connection()
+        cursor = SmartCursor(conn)
+        cursor.execute('SELECT bakiye, taraftar, mesajlar FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+        satir = cursor.fetchone()
+        bakiye, taraftar, mesajlar = satir[0], satir[1], json.loads(satir[2]) if satir[2] else []
+        teklif = next((m for m in mesajlar if m.get('id') == islem_id), None)
+        if teklif and aksiyon == 'kabul':
+            if bakiye < teklif.get('maliyet_bakiye', 0):
+                conn.close()
+                return jsonify({"durum": "hata", "mesaj": "Bakiye yetersiz!"})
+            if taraftar < teklif.get('maliyet_taraftar', 0):
+                conn.close()
+                return jsonify({"durum": "hata", "mesaj": "Taraftar yetersiz!"})
+            bakiye -= teklif.get('maliyet_bakiye', 0)
+            taraftar -= teklif.get('maliyet_taraftar', 0)
+            bakiye += teklif.get('kazanc_bakiye', 0)
+            taraftar += teklif.get('kazanc_taraftar', 0)
+        mesajlar = [m for m in mesajlar if m.get('id') != islem_id]
+        cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, mesajlar=%s WHERE user_id=%s', (bakiye, taraftar, json.dumps(mesajlar), user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({"durum": "basarili"})
+    except Exception as e:
+        return jsonify({"durum": "hata", "mesaj": str(e)}), 500
+
+@app.route('/gunluk_odul', methods=['GET'])
+@login_required
+def gunluk_odul():
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT son_giris, gunluk_odul_alinmis FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    son_giris, alinmis = cursor.fetchone()
+    son_giris = datetime.fromisoformat(son_giris) if son_giris else datetime.now()
+    bugun = datetime.now().date()
+    conn.close()
+    if son_giris.date() != bugun and not alinmis:
+        return jsonify({"durum": "alabilir", "mesaj": "Günlük giriş ödülünü alabilirsin!"})
+    elif son_giris.date() == bugun and not alinmis:
+        return jsonify({"durum": "alabilir", "mesaj": "Günlük giriş ödülünü al!"})
+    else:
+        return jsonify({"durum": "alinmis", "mesaj": "Bugün ödülünü zaten aldın."})
+
+@app.route('/gunluk_odul_al', methods=['POST'])
+@login_required
+def gunluk_odul_al():
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT gunluk_odul_alinmis FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    alinmis = cursor.fetchone()[0]
+    if alinmis:
+        conn.close()
+        return jsonify({"durum": "hata", "mesaj": "Zaten aldın!"})
+    odul_bakiye = 100 + random.randint(0, 50)
+    odul_taraftar = 10 + random.randint(0, 10)
+    cursor.execute('UPDATE oyun_kaydi SET bakiye = bakiye + %s, taraftar = taraftar + %s, son_giris = %s, gunluk_odul_alinmis = TRUE WHERE user_id=%s',
+                   (odul_bakiye, odul_taraftar, datetime.now(), user_id))
+    cursor.execute('UPDATE yayin_istatistikleri SET toplam_kazanilan_para = toplam_kazanilan_para + %s, toplam_kazanilan_taraftar = toplam_kazanilan_taraftar + %s WHERE user_id=%s',
+                   (odul_bakiye, odul_taraftar, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"durum": "basarili", "odul_bakiye": odul_bakiye, "odul_taraftar": odul_taraftar})
+
+@app.route('/istatistikler', methods=['GET'])
+@login_required
+def istatistikler():
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT toplam_yayin_suresi, toplam_kazanilan_para, toplam_kazanilan_taraftar, toplam_tiklama, en_yuksek_gelir FROM yayin_istatistikleri WHERE user_id=%s', (user_id,))
+    istatistik = cursor.fetchone()
+    conn.close()
+    if istatistik:
+        return jsonify({
+            "toplam_yayin_suresi": istatistik[0],
+            "toplam_kazanilan_para": istatistik[1],
+            "toplam_kazanilan_taraftar": istatistik[2],
+            "toplam_tiklama": istatistik[3],
+            "en_yuksek_gelir": istatistik[4]
+        })
+    return jsonify({"durum": "yok"})
+
+@app.route('/etkinlikler', methods=['GET'])
+@login_required
+def etkinlikler_listesi():
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    simdi = datetime.now()
+    cursor.execute('SELECT id, name, description, baslangic, bitis, reward_type, reward_amount FROM etkinlikler WHERE aktif=TRUE')
+    etkinlikler = cursor.fetchall()
+    sonuc = []
+    for e in etkinlikler:
+        baslangic = datetime.fromisoformat(e[3])
+        bitis = datetime.fromisoformat(e[4])
+        if baslangic <= simdi <= bitis:
+            sonuc.append({
+                'id': e[0], 'name': e[1], 'description': e[2],
+                'baslangic': e[3], 'bitis': e[4],
+                'reward_type': e[5], 'reward_amount': e[6],
+                'aktif': True
+            })
+    conn.close()
+    return jsonify(sonuc)
+
+@app.route('/etkinlik_progress', methods=['GET'])
+@login_required
+def etkinlik_progress():
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT etkinlik_id, progress, tamamlandi FROM kullanici_etkinlik_progress WHERE user_id=%s', (user_id,))
+    progress = cursor.fetchall()
+    conn.close()
+    return jsonify([{'etkinlik_id': p[0], 'progress': p[1], 'tamamlandi': bool(p[2])} for p in progress])
+
+@app.route('/etkinlik_tamamla', methods=['POST'])
+@login_required
+def etkinlik_tamamla():
+    data = request.json
+    etkinlik_id = data.get('etkinlik_id')
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT reward_type, reward_amount FROM etkinlikler WHERE id=%s AND aktif=TRUE', (etkinlik_id,))
+    etkinlik = cursor.fetchone()
+    if not etkinlik:
+        conn.close()
+        return jsonify({"durum": "hata", "mesaj": "Etkinlik bulunamadı"})
+    cursor.execute('SELECT tamamlandi FROM kullanici_etkinlik_progress WHERE user_id=%s AND etkinlik_id=%s', (user_id, etkinlik_id))
+    satir = cursor.fetchone()
+    if satir and satir[0]:
+        conn.close()
+        return jsonify({"durum": "hata", "mesaj": "Zaten tamamlanmış"})
+    cursor.execute('SELECT bakiye, taraftar, tiklamaGucu FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    oyuncu = cursor.fetchone()
+    bakiye, taraftar, tiklamaGucu = oyuncu
+    if etkinlik[0] == 'bakiye':
+        bakiye += etkinlik[1]
+    elif etkinlik[0] == 'taraftar':
+        taraftar += etkinlik[1]
+    elif etkinlik[0] == 'tiklamaGucu':
+        tiklamaGucu += etkinlik[1]
+    cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, tiklamaGucu=%s WHERE user_id=%s', (bakiye, taraftar, tiklamaGucu, user_id))
+    cursor.execute('INSERT INTO kullanici_etkinlik_progress (user_id, etkinlik_id, progress, tamamlandi) VALUES (%s, %s, %s, TRUE) ON CONFLICT (user_id, etkinlik_id) DO UPDATE SET tamamlandi=TRUE', (user_id, etkinlik_id, etkinlik[1]))
+    conn.commit()
+    conn.close()
+    return jsonify({"durum": "basarili", "reward_type": etkinlik[0], "reward_amount": etkinlik[1]})
+
+@app.route('/liderlik', methods=['GET'])
+@login_required
+def liderlik():
+    user_id = session['user_id']
+    username = session['username']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT prestij, level, toplam_gelir, toplam_taraftar FROM liderlik WHERE user_id=%s', (user_id,))
+    lider = cursor.fetchone()
+    conn.close()
+    if lider:
+        return jsonify([{
+            'sira': 1,
+            'kullanici': username,
+            'prestij': lider[0],
+            'level': lider[1],
+            'toplam_gelir': lider[2],
+            'toplam_taraftar': lider[3]
+        }])
+    return jsonify([])
+
+@app.route('/achievements', methods=['GET'])
+@login_required
+def achievements():
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT toplam_tiklama, taraftar, saniyeGeliri, level, prestij FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    oyuncu = cursor.fetchone()
+    cursor.execute('SELECT id, name, description, icon, condition_type, condition_value, reward_type, reward_amount FROM achievements')
+    tum_basarimlar = cursor.fetchall()
+    sonuc = []
+    for b in tum_basarimlar:
+        unlocked = False
+        if b[4] == 'toplam_tiklama' and oyuncu[0] >= b[5]:
+            unlocked = True
+        elif b[4] == 'taraftar_sayisi' and oyuncu[1] >= b[5]:
+            unlocked = True
+        elif b[4] == 'saniye_geliri' and oyuncu[2] >= b[5]:
+            unlocked = True
+        elif b[4] == 'level' and oyuncu[3] >= b[5]:
+            unlocked = True
+        elif b[4] == 'prestij_sayisi' and oyuncu[4] >= b[5]:
+            unlocked = True
+        sonuc.append({
+            'id': b[0], 'name': b[1], 'description': b[2], 'icon': b[3],
+            'condition_type': b[4], 'condition_value': b[5],
+            'reward_type': b[6], 'reward_amount': b[7],
+            'unlocked': unlocked
+        })
+    conn.close()
+    return jsonify(sonuc)
+
+@app.route('/daily_quests', methods=['GET'])
+@login_required
+def daily_quests():
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT id, name, description, condition_type, condition_value, reward_type, reward_amount FROM daily_quests')
+    gorevler = cursor.fetchall()
+    cursor.execute('SELECT toplam_tiklama, taraftar FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    oyuncu = cursor.fetchone()
+    sonuc = []
+    for g in gorevler:
+        progress = 0
+        if g[3] == 'toplam_tiklama':
+            progress = oyuncu[0]
+        elif g[3] == 'taraftar_kazanimi':
+            progress = oyuncu[1]
+        elif g[3] == 'esya_satin_alma':
+            progress = 0
+        completed = progress >= g[4]
+        sonuc.append({
+            'id': g[0], 'name': g[1], 'description': g[2],
+            'condition_type': g[3], 'condition_value': g[4],
+            'reward_type': g[5], 'reward_amount': g[6],
+            'progress': progress, 'completed': completed
+        })
+    conn.close()
+    return jsonify(sonuc)
+
+@app.route('/claim_daily_quest', methods=['POST'])
+@login_required
+def claim_daily_quest():
+    data = request.json
+    quest_id = data.get('quest_id')
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT reward_type, reward_amount, condition_type, condition_value FROM daily_quests WHERE id=%s', (quest_id,))
+    gorev = cursor.fetchone()
+    if not gorev:
+        conn.close()
+        return jsonify({'durum': 'hata', 'mesaj': 'Geçersiz görev'})
+    cursor.execute('SELECT toplam_tiklama, taraftar FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    oyuncu = cursor.fetchone()
+    progress = 0
+    if gorev[2] == 'toplam_tiklama':
+        progress = oyuncu[0]
+    elif gorev[2] == 'taraftar_kazanimi':
+        progress = oyuncu[1]
+    elif gorev[2] == 'esya_satin_alma':
+        progress = 0
+    if progress < gorev[3]:
+        conn.close()
+        return jsonify({'durum': 'hata', 'mesaj': 'Görev henüz tamamlanmamış!'})
+    cursor.execute('SELECT bakiye, taraftar, tiklamaGucu FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    oyuncu2 = cursor.fetchone()
+    bakiye, taraftar, tiklamaGucu = oyuncu2
+    if gorev[0] == 'bakiye':
+        bakiye += gorev[1]
+    elif gorev[0] == 'taraftar':
+        taraftar += gorev[1]
+    elif gorev[0] == 'tiklamaGucu':
+        tiklamaGucu += gorev[1]
+    cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, tiklamaGucu=%s WHERE user_id=%s', (bakiye, taraftar, tiklamaGucu, user_id))
+    bugun = datetime.now().date()
+    cursor.execute('INSERT INTO daily_quest_progress (user_id, quest_id, progress, completed, date) VALUES (%s, %s, %s, TRUE, %s) ON CONFLICT (user_id, quest_id, date) DO UPDATE SET progress=%s, completed=TRUE', (user_id, quest_id, progress, bugun, progress))
+    conn.commit()
+    conn.close()
+    return jsonify({'durum': 'basarili'})
+
+@app.route('/studio_decorations', methods=['GET'])
+@login_required
+def studio_decorations():
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT id, name, description, icon, price, bonus_type, bonus_value, is_special, required_prestige FROM studio_decorations')
+    dekorlar = cursor.fetchall()
+    cursor.execute('SELECT decoration_id, equipped FROM user_decorations WHERE user_id=%s', (user_id,))
+    sahip_olanlar = {row[0]: row[1] for row in cursor.fetchall()}
+    conn.close()
+    sonuc = []
+    for d in dekorlar:
+        sonuc.append({
+            'id': d[0], 'name': d[1], 'description': d[2], 'icon': d[3],
+            'price': d[4], 'bonus_type': d[5], 'bonus_value': d[6],
+            'is_special': bool(d[7]), 'required_prestige': d[8],
+            'owned': d[0] in sahip_olanlar,
+            'equipped': sahip_olanlar.get(d[0], False)
+        })
+    return jsonify(sonuc)
+
+@app.route('/buy_decoration', methods=['POST'])
+@login_required
+def buy_decoration():
+    data = request.json
+    deco_id = data.get('decoration_id')
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT price, is_special, required_prestige FROM studio_decorations WHERE id=%s', (deco_id,))
+    dekor = cursor.fetchone()
+    if not dekor:
+        conn.close()
+        return jsonify({'durum': 'hata', 'mesaj': 'Dekorasyon bulunamadı'})
+    if dekor[1]:
+        cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+        prestij = cursor.fetchone()[0]
+        if prestij < dekor[2]:
+            conn.close()
+            return jsonify({'durum': 'hata', 'mesaj': 'Bu dekorasyon için yeterli prestij seviyesine sahip değilsin'})
+    cursor.execute('SELECT bakiye FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    bakiye = cursor.fetchone()[0]
+    if bakiye < dekor[0]:
+        conn.close()
+        return jsonify({'durum': 'hata', 'mesaj': 'Yetersiz bakiye'})
+    cursor.execute('UPDATE oyun_kaydi SET bakiye = bakiye - %s WHERE user_id=%s', (dekor[0], user_id))
+    cursor.execute('INSERT INTO user_decorations (user_id, decoration_id, purchased_at, equipped) VALUES (%s, %s, %s, FALSE)', (user_id, deco_id, datetime.now()))
+    conn.commit()
+    conn.close()
+    return jsonify({'durum': 'basarili'})
+
+@app.route('/equip_decoration', methods=['POST'])
+@login_required
+def equip_decoration():
+    data = request.json
+    deco_id = data.get('decoration_id')
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('UPDATE user_decorations SET equipped = FALSE WHERE user_id=%s', (user_id,))
+    cursor.execute('UPDATE user_decorations SET equipped = TRUE WHERE user_id=%s AND decoration_id=%s', (user_id, deco_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'durum': 'basarili'})
+
+@app.route('/open_lootbox', methods=['POST'])
+@login_required
+def open_lootbox():
+    data = request.json
+    box_id = data.get('box_id')
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT reward_pool FROM loot_boxes WHERE id=%s', (box_id,))
+    result = cursor.fetchone()
+    if not result:
+        conn.close()
+        return jsonify({'durum': 'hata', 'mesaj': 'Geçersiz kutu'})
+    pool = json.loads(result[0])
+    toplam_agirlik = sum(item['agirlik'] for item in pool)
+    r = random.randint(1, toplam_agirlik)
+    secilen = None
+    for item in pool:
+        r -= item['agirlik']
+        if r <= 0:
+            secilen = item
+            break
+    if not secilen:
+        secilen = pool[-1]
+    cursor.execute('SELECT bakiye, taraftar, tiklamaGucu FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    oyuncu = cursor.fetchone()
+    bakiye, taraftar, tiklamaGucu = oyuncu
+    if secilen['tip'] == 'bakiye':
+        bakiye += secilen['miktar']
+    elif secilen['tip'] == 'taraftar':
+        taraftar += secilen['miktar']
+    elif secilen['tip'] == 'tiklamaGucu':
+        tiklamaGucu += secilen['miktar']
+    cursor.execute('UPDATE oyun_kaydi SET bakiye=%s, taraftar=%s, tiklamaGucu=%s WHERE user_id=%s', (bakiye, taraftar, tiklamaGucu, user_id))
+    cursor.execute('INSERT INTO user_loot_history (user_id, loot_id, reward_type, reward_amount, opened_at) VALUES (%s, %s, %s, %s, %s)', (user_id, box_id, secilen['tip'], secilen['miktar'], datetime.now()))
+    conn.commit()
+    conn.close()
+    return jsonify({'durum': 'basarili', 'reward_type': secilen['tip'], 'reward_amount': secilen['miktar']})
+
+@app.route('/prestige_special_items', methods=['GET'])
+@login_required
+def prestige_special_items():
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT prestij FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    prestij = cursor.fetchone()[0]
+    cursor.execute('SELECT id, name, description, icon, required_prestige, bonus_type, bonus_value FROM prestige_special_items WHERE required_prestige <= %s', (prestij,))
+    items = cursor.fetchall()
+    conn.close()
+    return jsonify([{
+        'id': i[0], 'name': i[1], 'description': i[2], 'icon': i[3],
+        'required_prestige': i[4], 'bonus_type': i[5], 'bonus_value': i[6]
+    } for i in items])
+
+@app.route('/ai_opponents', methods=['GET'])
+@login_required
+def ai_opponents():
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    rakipler = cursor.execute('SELECT id, income, followers, level, growth_rate, last_updated FROM ai_opponents').fetchall()
+    simdi = datetime.now()
+    for r in rakipler:
+        fark = (simdi - r[5]).total_seconds() / 3600
+        if fark > 1:
+            yeni_gelir = int(r[1] * (r[4] ** fark))
+            yeni_taraftar = int(r[2] * (r[4] ** (fark * 0.5)))
+            cursor.execute('UPDATE ai_opponents SET income=%s, followers=%s, last_updated=%s WHERE id=%s', (yeni_gelir, yeni_taraftar, simdi, r[0]))
+    conn.commit()
+    cursor.execute('SELECT id, name, icon, income, followers, level FROM ai_opponents')
+    rakipler = cursor.fetchall()
+    conn.close()
+    return jsonify([{
+        'id': r[0], 'name': r[1], 'icon': r[2],
+        'income': r[3], 'followers': r[4], 'level': r[5]
+    } for r in rakipler])
+
+@app.route('/challenge_ai', methods=['POST'])
+@login_required
+def challenge_ai():
+    data = request.json
+    ai_id = data.get('ai_id')
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cursor = SmartCursor(conn)
+    cursor.execute('SELECT income, followers FROM ai_opponents WHERE id=%s', (ai_id,))
+    rakip = cursor.fetchone()
+    cursor.execute('SELECT bakiye, taraftar, saniyeGeliri FROM oyun_kaydi WHERE user_id=%s', (user_id,))
+    oyuncu = cursor.fetchone()
+    oyuncu_puan = oyuncu[2] * 2 + oyuncu[1]
+    rakip_puan = rakip[0] * 2 + rakip[1]
+    if oyuncu_puan > rakip_puan:
+        odul = random.randint(100, 500)
+        cursor.execute('UPDATE oyun_kaydi SET bakiye = bakiye + %s WHERE user_id=%s', (odul, user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'durum': 'kazandi', 'odul': odul})
+    else:
+        conn.close()
+        return jsonify({'durum': 'kaybetti', 'mesaj': 'Rakip senden daha güçlü!'})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
