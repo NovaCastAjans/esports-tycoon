@@ -9,9 +9,9 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'çok_gizli_bir_anahtar_değiştir_bunu')
+app.secret_key = 'çok_gizli_bir_anahtar_değiştir_bunu'
 
-# ---------- VARSAYILAN VERİLER ----------
+# ---------- VARSAYILAN VERİLER (GLOBAL) ----------
 DEFAULT_MARKET = {
     "enerji": {"fiyat": 75, "tur": "tiklama", "guc": 2, "fiyatArtisi": 1.5, "gerekenTaraftar": 0},
     "mouse": {"fiyat": 150, "tur": "tiklama", "guc": 3, "fiyatArtisi": 1.6, "gerekenTaraftar": 0},
@@ -65,6 +65,7 @@ class SmartCursor:
 def get_db_connection():
     DATABASE_URL = os.environ.get('DATABASE_URL')
     if not DATABASE_URL:
+        # Render'da DATABASE_URL yoksa SQLite kullan (yerelde olduğu gibi)
         conn = sqlite3.connect('database.db')
         conn.row_factory = sqlite3.Row
         return conn
@@ -243,7 +244,7 @@ def veritabani_kur():
         PRIMARY KEY (user_id, etkinlik_id)
     )''')
 
-    # Varsayılan veriler
+    # Varsayılan veriler (diğer tablolar için)
     cursor.execute('SELECT COUNT(*) FROM achievements')
     if cursor.fetchone()[0] == 0:
         basarimlar = [
@@ -445,18 +446,18 @@ def oyunu_yukle():
         satir = cursor.fetchone()
         conn.close()
         if satir:
-            # Market ve personel verilerini kontrol et
+            # Market ve personel verilerini kontrol et, boşsa varsayılanı ata
             market_data = satir[4]
-            if not market_data or market_data == 'null' or market_data == '{}' or market_data == '[]':
+            if not market_data or market_data == 'null' or market_data == '{}':
                 market_data = json.dumps(DEFAULT_MARKET)
+                # Veritabanını da güncelle (kalıcı çözüm)
                 conn2 = get_db_connection()
                 cur2 = SmartCursor(conn2)
                 cur2.execute('UPDATE oyun_kaydi SET marketEsyalari=%s WHERE user_id=%s', (market_data, user_id))
                 conn2.commit()
                 conn2.close()
-            
             personeller_data = satir[10]
-            if not personeller_data or personeller_data == 'null' or personeller_data == '{}' or personeller_data == '[]':
+            if not personeller_data or personeller_data == 'null' or personeller_data == '{}':
                 personeller_data = json.dumps(DEFAULT_PERSONELLER)
                 conn2 = get_db_connection()
                 cur2 = SmartCursor(conn2)
@@ -484,6 +485,7 @@ def oyunu_yukle():
     except Exception as e:
         return jsonify({"durum": "hata", "mesaj": str(e)}), 500
 
+# ---------- PRESTİJ ----------
 @app.route('/prestij_yap', methods=['POST'])
 @login_required
 def prestij_islem():
@@ -507,6 +509,7 @@ def prestij_islem():
     except Exception as e:
         return jsonify({"durum": "hata", "mesaj": str(e)}), 500
 
+# ---------- TEKLİF ----------
 @app.route('/teklif_al', methods=['POST'])
 @login_required
 def teklif_al():
@@ -584,6 +587,7 @@ def teklif_islem():
     except Exception as e:
         return jsonify({"durum": "hata", "mesaj": str(e)}), 500
 
+# ---------- GÜNLÜK ÖDÜL ----------
 @app.route('/gunluk_odul', methods=['GET'])
 @login_required
 def gunluk_odul():
@@ -623,6 +627,7 @@ def gunluk_odul_al():
     conn.close()
     return jsonify({"durum": "basarili", "odul_bakiye": odul_bakiye, "odul_taraftar": odul_taraftar})
 
+# ---------- İSTATİSTİKLER ----------
 @app.route('/istatistikler', methods=['GET'])
 @login_required
 def istatistikler():
@@ -642,6 +647,7 @@ def istatistikler():
         })
     return jsonify({"durum": "yok"})
 
+# ---------- ETKİNLİKLER ----------
 @app.route('/etkinlikler', methods=['GET'])
 @login_required
 def etkinlikler_listesi():
@@ -708,6 +714,7 @@ def etkinlik_tamamla():
     conn.close()
     return jsonify({"durum": "basarili", "reward_type": etkinlik[0], "reward_amount": etkinlik[1]})
 
+# ---------- LİDERLİK ----------
 @app.route('/liderlik', methods=['GET'])
 @login_required
 def liderlik():
@@ -729,6 +736,7 @@ def liderlik():
         }])
     return jsonify([])
 
+# ---------- BAŞARIMLAR ----------
 @app.route('/achievements', methods=['GET'])
 @login_required
 def achievements():
@@ -761,6 +769,7 @@ def achievements():
     conn.close()
     return jsonify(sonuc)
 
+# ---------- GÜNLÜK GÖREVLER ----------
 @app.route('/daily_quests', methods=['GET'])
 @login_required
 def daily_quests():
@@ -831,6 +840,7 @@ def claim_daily_quest():
     conn.close()
     return jsonify({'durum': 'basarili'})
 
+# ---------- STÜDYO DEKORASYON ----------
 @app.route('/studio_decorations', methods=['GET'])
 @login_required
 def studio_decorations():
@@ -897,6 +907,7 @@ def equip_decoration():
     conn.close()
     return jsonify({'durum': 'basarili'})
 
+# ---------- LOOT KUTUSU ----------
 @app.route('/open_lootbox', methods=['POST'])
 @login_required
 def open_lootbox():
@@ -936,6 +947,7 @@ def open_lootbox():
     conn.close()
     return jsonify({'durum': 'basarili', 'reward_type': secilen['tip'], 'reward_amount': secilen['miktar']})
 
+# ---------- PRESTİJ ÖZEL EŞYALAR ----------
 @app.route('/prestige_special_items', methods=['GET'])
 @login_required
 def prestige_special_items():
@@ -952,6 +964,7 @@ def prestige_special_items():
         'required_prestige': i[4], 'bonus_type': i[5], 'bonus_value': i[6]
     } for i in items])
 
+# ---------- AI RAKİPLERİ ----------
 @app.route('/ai_opponents', methods=['GET'])
 @login_required
 def ai_opponents():
